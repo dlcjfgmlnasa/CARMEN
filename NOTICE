@@ -1,0 +1,18 @@
+CARMEN — Cardiorespiratory Foundation Model
+Copyright 2026 The CARMEN Authors
+
+This product includes software ported and adapted from:
+
+  uni2ts (Salesforce)
+  https://github.com/SalesforceAIResearch/uni2ts
+  Licensed under the Apache License, Version 2.0.
+
+The following modules contain code derived from uni2ts:
+  - module/attention.py
+  - module/ffn.py
+  - module/packed_scaler.py
+  - module/position/attn_bias.py
+  - module/position/attn_projection.py
+
+These files were modified (e.g. RMSNorm as the default norm layer, packed-batch
+scalers, and integration into the CARMEN architecture).

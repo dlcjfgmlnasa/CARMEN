@@ -1,0 +1,48 @@
+# -*- coding:utf-8 -*-
+"""00 — Smoke test.
+
+Builds a fresh (randomly initialized) CARMEN from a config — no checkpoint needed —
+and runs a forward pass. Use this to confirm the package is wired up correctly.
+
+    python examples/00_smoke_test.py
+"""
+from _common import make_batch  # adds the repo root to sys.path
+
+import torch
+
+from model import CARMEN, ModelConfig
+
+
+def main() -> None:
+    cfg = ModelConfig(
+        d_model=128, num_layers=2, patch_size=100, num_heads=4, num_signal_types=9
+    )
+    model = CARMEN.from_config(cfg).eval()
+    n_params = sum(p.numel() for p in model.parameters())
+    print(
+        f"CARMEN built: {n_params / 1e6:.2f}M params "
+        f"(d_model={cfg.d_model}, patch_size={cfg.patch_size})"
+    )
+
+    # 10 s of synthetic ECG + PPG + ABP at 100 Hz (1.2 Hz ~ 72 bpm)
+    t = torch.linspace(0, 10, 1000)
+    ecg = torch.sin(2 * torch.pi * 1.2 * t)
+    ppg = torch.sin(2 * torch.pi * 1.2 * t - 0.6)
+    abp = 80 + 30 * torch.sin(2 * torch.pi * 1.2 * t - 0.3)
+    batch = make_batch(
+        [("ecg", ecg), ("ppg", ppg), ("abp", abp)], patch_size=cfg.patch_size
+    )
+
+    with torch.no_grad():
+        feats = model.extract_features(batch)
+
+    encoded = feats["encoded"]                       # (B, N, d_model)
+    mask = feats["patch_mask"].unsqueeze(-1).float()  # (B, N, 1)
+    pooled = (encoded * mask).sum(1) / mask.sum(1).clamp(min=1.0)  # (B, d_model)
+
+    print(f"encoded: {tuple(encoded.shape)}  ->  pooled features: {tuple(pooled.shape)}")
+    print("OK")
+
+
+if __name__ == "__main__":
+    main()
