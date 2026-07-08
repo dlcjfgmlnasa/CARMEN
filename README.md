@@ -5,17 +5,13 @@ waveforms. A single Transformer encoder (~30M parameters) is pretrained across
 **9 signal modalities** and transfers to feature extraction, cross-modal waveform
 generation, and forecasting.
 
-This repository is an **inference-only release**: the model definition, the pretrained
-weights loader, and runnable examples. Training code is intentionally not included — a
-trained checkpoint plus this code is all you need to run CARMEN.
-
-| id | modality          | id | modality              |
-|----|-------------------|----|-----------------------|
-| 0  | ECG               | 5  | AWP (airway pressure) |
-| 1  | ABP               | 6  | ICP                   |
-| 2  | PPG               | 7  | RESP_Impedance        |
-| 3  | CVP               | 8  | RESP_Flow             |
-| 4  | CO2 (capnography) |    |                       |
+| id | modality                      | id | modality                         |
+|----|-------------------------------|----|----------------------------------|
+| 0  | ECG (electrocardiogram)       | 5  | AWP (airway pressure)            |
+| 1  | ABP (arterial blood pressure) | 6  | ICP (intracranial pressure)      |
+| 2  | PPG (photoplethysmography)    | 7  | RESP_Impedance (chest impedance) |
+| 3  | CVP (central venous pressure) | 8  | RESP_Flow (ventilator flow)      |
+| 4  | CO2 (capnography)             |    |                                  |
 
 CARMEN is pretrained at **100 Hz** with a patch size of **200 samples (2 s/token)** —
 resample your signals to 100 Hz before use.
