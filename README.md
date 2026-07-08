@@ -1,8 +1,9 @@
 # CARMEN
 
 **CARMEN** is a cardiorespiratory foundation model for continuous physiological
-waveforms. A single Transformer encoder is pretrained across **9 signal modalities**
-and transfers to feature extraction, cross-modal waveform generation, and forecasting.
+waveforms. A single Transformer encoder (~30M parameters) is pretrained across
+**9 signal modalities** and transfers to feature extraction, cross-modal waveform
+generation, and forecasting.
 
 This repository is an **inference-only release**: the model definition, the pretrained
 weights loader, and runnable examples. Training code is intentionally not included — a
