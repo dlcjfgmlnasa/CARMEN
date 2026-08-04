@@ -1,5 +1,5 @@
 # -*- coding:utf-8 -*-
-"""03 — Zero-shot cross-modal generation.
+"""03 — Cross-modal generation.
 
     python examples/03_cross_modal_generation.py [path/to/checkpoint.pt]
 

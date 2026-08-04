@@ -507,10 +507,10 @@ class CARMEN(nn.Module):
         target_signal_type: int,
         denormalize: bool = True,
     ) -> dict[str, torch.Tensor]:
-        """Zero-shot cross-modal waveform generation.
+        """Cross-modal waveform generation.
 
         Generate the waveform of ``target_signal_type`` from the source signals in
-        ``batch``, using the cross-modal head trained for that target.
+        ``batch``, using the pretrained cross-modal head for that target.
 
         Parameters
         ----------

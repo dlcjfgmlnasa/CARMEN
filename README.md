@@ -26,7 +26,7 @@ flowchart LR
   PE --> TR["Transformer encoder<br/>GQA · GLU FFN · RoPE · LSCNorm"]
   SC -.->|"loc / scale as AdaLN conditioning"| TR
   TR --> O1["reconstruction head<br/>→ features · anomaly scoring"]
-  TR --> O2["cross-modal heads<br/>→ zero-shot generation"]
+  TR --> O2["cross-modal heads<br/>→ cross-modal reconstruction"]
   TR --> O3["block next-patch head<br/>→ forecasting · roll-out"]
 ```
 
@@ -36,7 +36,7 @@ flowchart LR
 and in the operating room. A **single Transformer encoder (~30M parameters)** is
 pretrained across **9 signal modalities** and transfers to three families of task
 without architectural surgery: **feature extraction** for downstream heads,
-**zero-shot cross-modal generation**, and **waveform forecasting**.
+**cross-modal waveform reconstruction**, and **waveform forecasting**.
 
 Two design choices carry most of the weight. Every modality is tokenized the same
 way — raw patches, one shared encoder — so a single model covers all nine instead of
@@ -45,13 +45,71 @@ away the absolute level of a pressure waveform, the `(loc, scale)` stripped out 
 scaler is fed back into **every** layer as AdaLN modulation (`LSCNorm`), keeping
 clinically meaningful magnitudes available to the encoder.
 
-| id | modality                      | id | modality                         |
-|:--:|-------------------------------|:--:|----------------------------------|
-| 0  | ECG (electrocardiogram)       | 5  | AWP (airway pressure)            |
-| 1  | ABP (arterial blood pressure) | 6  | ICP (intracranial pressure)      |
-| 2  | PPG (photoplethysmography)    | 7  | RESP_Impedance (chest impedance) |
-| 3  | CVP (central venous pressure) | 8  | RESP_Flow (ventilator flow)      |
-| 4  | CO2 (capnography)             |    |                                  |
+The nine modalities split by the mechanism that drives the waveform — the grouping
+exposed as `carmen.MECHANISM_GROUP`:
+
+<table>
+  <tr>
+    <th colspan="4" align="left">🫀&nbsp; Cardiovascular &nbsp;·&nbsp; <sub>locked to the cardiac cycle</sub></th>
+  </tr>
+  <tr>
+    <td><img src="figures/icons/ecg.svg" width="56" alt=""></td>
+    <td align="center"><code>0</code></td>
+    <td><b>ECG</b></td>
+    <td>electrocardiogram</td>
+  </tr>
+  <tr>
+    <td><img src="figures/icons/abp.svg" width="56" alt=""></td>
+    <td align="center"><code>1</code></td>
+    <td><b>ABP</b></td>
+    <td>arterial blood pressure, invasive</td>
+  </tr>
+  <tr>
+    <td><img src="figures/icons/ppg.svg" width="56" alt=""></td>
+    <td align="center"><code>2</code></td>
+    <td><b>PPG</b></td>
+    <td>photoplethysmography — peripheral pulse</td>
+  </tr>
+  <tr>
+    <td><img src="figures/icons/cvp.svg" width="56" alt=""></td>
+    <td align="center"><code>3</code></td>
+    <td><b>CVP</b></td>
+    <td>central venous pressure</td>
+  </tr>
+  <tr>
+    <td><img src="figures/icons/icp.svg" width="56" alt=""></td>
+    <td align="center"><code>6</code></td>
+    <td><b>ICP</b></td>
+    <td>intracranial pressure</td>
+  </tr>
+  <tr>
+    <th colspan="4" align="left">🫁&nbsp; Respiratory &nbsp;·&nbsp; <sub>locked to the ventilation cycle</sub></th>
+  </tr>
+  <tr>
+    <td><img src="figures/icons/co2.svg" width="56" alt=""></td>
+    <td align="center"><code>4</code></td>
+    <td><b>CO2</b></td>
+    <td>capnography — expired CO₂</td>
+  </tr>
+  <tr>
+    <td><img src="figures/icons/awp.svg" width="56" alt=""></td>
+    <td align="center"><code>5</code></td>
+    <td><b>AWP</b></td>
+    <td>airway pressure</td>
+  </tr>
+  <tr>
+    <td><img src="figures/icons/resp_impedance.svg" width="56" alt=""></td>
+    <td align="center"><code>7</code></td>
+    <td><b>RESP_Impedance</b></td>
+    <td>chest-impedance respiration</td>
+  </tr>
+  <tr>
+    <td><img src="figures/icons/resp_flow.svg" width="56" alt=""></td>
+    <td align="center"><code>8</code></td>
+    <td><b>RESP_Flow</b></td>
+    <td>ventilator flow</td>
+  </tr>
+</table>
 
 > [!IMPORTANT]
 > CARMEN is pretrained at **100 Hz** with a patch size of **200 samples (2 s/token)**.
@@ -117,7 +175,7 @@ loading, freezing, pooling and LoRA on top.
 | method                                        | purpose                                            |
 |-----------------------------------------------|----------------------------------------------------|
 | `model.extract_features(batch)`               | encoder embeddings for downstream heads            |
-| `model.generate_cross_modal(batch, target)`   | synthesize one modality from others (zero-shot)    |
+| `model.generate_cross_modal(batch, target)`   | synthesize one modality from the others            |
 | `model.forecast(batch)`                       | block next-patch prediction map `(B, N, K, P)`     |
 | `model.generate(batch, n_steps)`              | autoregressive waveform roll-out                   |
 | `wrapper.extract_features(batch, pool=...)`   | frozen features (+ optional gap-masking / pooling) |
