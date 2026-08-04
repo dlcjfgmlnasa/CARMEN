@@ -1,12 +1,12 @@
 # -*- coding:utf-8 -*-
-"""Foundation model loading + encoder freeze/unfreeze + LoRA wrapper.
+"""Checkpoint loading + encoder freezing + LoRA, for downstream tasks.
 
-For downstream tasks, load the pretrained model, extract features with the encoder
-frozen, or insert LoRA adapters for efficient fine-tuning.
+Load a pretrained CARMEN, extract features with the encoder frozen, or insert LoRA
+adapters for parameter-efficient fine-tuning.
 
 Usage
 -----
->>> wrapper = DownstreamModelWrapper("checkpoints/best.pt")
+>>> wrapper = DownstreamModelWrapper("checkpoints/carmen.pt")
 >>> features = wrapper.extract_features(batch)  # (B, d_model)
 >>> probe = LinearProbe(wrapper.d_model, n_classes=3)
 >>>
@@ -23,19 +23,20 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from data.collate import PackedBatch
-from model import ModelConfig
-from model.biosignal_model import CARMEN
+from carmen.config import ModelConfig
+from carmen.data.collate import PackedBatch
+from carmen.model import CARMEN
 
 
-# ── LoRA Layer ────────────────────────────────────────────────
+# ── LoRA ──────────────────────────────────────────────────────
 
 
 class LoRALinear(nn.Module):
-    """Low-Rank Adaptation wrapper for nn.Linear.
+    """Low-Rank Adaptation wrapper for ``nn.Linear``.
 
-    Freezes the original Linear and adds trainable low-rank A, B matrices.
-    output = frozen_linear(x) + (x @ A @ B) * (alpha / rank)
+    Freezes the original Linear and adds trainable low-rank A, B matrices::
+
+        output = frozen_linear(x) + (x @ A @ B) * (alpha / rank)
     """
 
     def __init__(
@@ -58,7 +59,7 @@ class LoRALinear(nn.Module):
         self.lora_B = nn.Linear(rank, out_features, bias=False)
         self.lora_dropout = nn.Dropout(dropout_p) if dropout_p > 0 else nn.Identity()
 
-        # Init: A is Kaiming, B is zero -> initial output equals the original
+        # Init: A is Kaiming, B is zero -> the initial output equals the original
         nn.init.kaiming_uniform_(self.lora_A.weight)
         nn.init.zeros_(self.lora_B.weight)
 
@@ -69,12 +70,12 @@ class LoRALinear(nn.Module):
 
 
 class DownstreamModelWrapper(nn.Module):
-    """Pretrained model loading + encoder freeze + feature extraction wrapper.
+    """Load a pretrained CARMEN, freeze it, and extract features.
 
     Parameters
     ----------
     checkpoint_path:
-        Pretrained checkpoint path (.pt).
+        Pretrained checkpoint path (``.pt``).
     device:
         Device to load the model onto.
     """
@@ -91,14 +92,11 @@ class DownstreamModelWrapper(nn.Module):
         state = torch.load(
             checkpoint_path, map_location=self.device, weights_only=False
         )
+        if "config" not in state:
+            raise ValueError(f"Checkpoint has no 'config' key: {checkpoint_path}")
+        config = ModelConfig.from_dict(state["config"])
 
-        if "config" in state:
-            config = ModelConfig.from_dict(state["config"])
-        else:
-            raise ValueError("Checkpoint has no 'config' key.")
-
-        model_cls = CARMEN
-        self.model: CARMEN = model_cls.from_config(config)
+        self.model: CARMEN = CARMEN.from_config(config)
         self.model.to(self.device)
 
         # 2. Load state dict
@@ -107,11 +105,11 @@ class DownstreamModelWrapper(nn.Module):
             strict=False,
         )
         if missing:
-            print(f"  [model_wrapper] Missing keys: {missing}")
+            print(f"  [CARMEN] Missing keys: {missing}")
         if unexpected:
-            print(f"  [model_wrapper] Unexpected keys: {unexpected}")
+            print(f"  [CARMEN] Unexpected keys: {unexpected}")
 
-        # 3. Freeze encoder + eval mode
+        # 3. Freeze + eval mode
         self.freeze_encoder()
         self.model.eval()
 
@@ -121,15 +119,11 @@ class DownstreamModelWrapper(nn.Module):
         self.config = config
 
     def freeze_encoder(self) -> None:
-        """Freeze all encoder parameters (requires_grad=False).
-
-        Freeze scope: scaler, patch_embed, encoder, signal_type_embed, cond_proj.
-        (v2: spatial_id_embed removed — single modality embedding.)
-        """
+        """Freeze every model parameter (``requires_grad=False``)."""
         self.model.requires_grad_(False)
 
     def unfreeze_encoder(self) -> None:
-        """Unfreeze encoder parameters (for fine-tuning)."""
+        """Unfreeze every model parameter (for full fine-tuning)."""
         self.model.requires_grad_(True)
 
     def inject_lora(
@@ -143,23 +137,30 @@ class DownstreamModelWrapper(nn.Module):
 
         Parameters
         ----------
-        rank: LoRA rank (r).
-        alpha: LoRA scaling factor.
-        dropout_p: LoRA dropout.
-        target_modules: names of the Linear layers to apply LoRA to.
+        rank:
+            LoRA rank (r).
+        alpha:
+            LoRA scaling factor.
+        dropout_p:
+            LoRA dropout.
+        target_modules:
+            Names of the Linear layers to wrap.
 
         Returns
         -------
-        Number of inserted LoRA parameters.
+        int
+            Number of trainable LoRA parameters inserted.
         """
         self.freeze_encoder()  # freeze everything, train only LoRA
 
         n_lora_params = 0
-        for name, module in self.model.named_modules():
+        for _name, module in self.model.named_modules():
             for target in target_modules:
                 child = getattr(module, target, None)
                 if child is not None and isinstance(child, nn.Linear):
-                    lora = LoRALinear(child, rank=rank, alpha=alpha, dropout_p=dropout_p)
+                    lora = LoRALinear(
+                        child, rank=rank, alpha=alpha, dropout_p=dropout_p
+                    )
                     lora = lora.to(self.device)
                     setattr(module, target, lora)
                     n_lora_params += rank * (child.in_features + child.out_features)
@@ -170,7 +171,7 @@ class DownstreamModelWrapper(nn.Module):
 
     def lora_parameters(self) -> list[nn.Parameter]:
         """Return only the trainable parameters of the LoRA adapters."""
-        params = []
+        params: list[nn.Parameter] = []
         for module in self.model.modules():
             if isinstance(module, LoRALinear):
                 params.extend(module.lora_A.parameters())
@@ -186,58 +187,50 @@ class DownstreamModelWrapper(nn.Module):
         max_mask_ratio: float | None = 0.5,
         return_validity: bool = False,
     ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
-        """Feature extraction for downstream tasks.
+        """Extract frozen features for a downstream head.
 
         Parameters
         ----------
         batch:
             PackedBatch produced by PackCollate.
         pool:
-            Pooling mode. ``"mean"`` = patch_mask-based mean pool,
-            ``"none"`` = return (B, N, d_model) as-is.
+            ``"mean"`` = mean-pool over valid patches, ``"none"`` = return
+            ``(B, N, d_model)`` unpooled.
         gap_mask_patch:
-            ``(B, N)`` bool — True=gap (patch to replace with mask_token).
-            Produced by ``downstream._gap_mask.sample_to_patch_mask``.
-            None means no gap handling (original behavior).
+            ``(B, N)`` bool — True marks a patch that is a data gap and should be
+            replaced by the [MASK] token. ``None`` disables gap handling.
         max_mask_ratio:
-            Option B input-level mask gate. A sample whose gap ratio among valid
-            patches exceeds this threshold is deemed untrustworthy (OOD w.r.t. the
-            pretrain mask distribution). Default 0.5 (50%). Set None to disable so
-            all samples pass. The features of invalid samples are filled with zero.
+            Sample-level gate. A sample whose gap ratio among valid patches exceeds
+            this threshold is out-of-distribution w.r.t. pretraining and its
+            features are zeroed. ``None`` disables the gate.
         return_validity:
-            If True, return (features, validity). validity[b]=True means the sample
-            passed the mask gate (trustworthy). Can be used as a weight during
-            aggregation.
+            If True, also return a ``(B,)`` bool telling which samples passed the
+            gate — useful as a weight when aggregating.
 
         Returns
         -------
-        features: ``(B, d_model)`` (pool="mean") or ``(B, N, d_model)`` (pool="none").
-        validity: ``(B,)`` bool — when return_validity=True.
+        features:
+            ``(B, d_model)`` when ``pool="mean"``, ``(B, N, d_model)`` when
+            ``pool="none"``.
+        validity:
+            ``(B,)`` bool — only when ``return_validity=True``.
         """
         self.model.eval()
         batch = self.batch_to_device(batch)
 
-        out = self.model(
-            batch, task="masked", extra_content_mask=gap_mask_patch,
-        )
+        out = self.model(batch, task="masked", extra_content_mask=gap_mask_patch)
         encoded = out["encoded"]  # (B, N, d_model)
         patch_mask = out["patch_mask"]  # (B, N) bool — True=valid patch
 
-        # Option B — Input-level mask gate:
-        # If the gap ratio among valid patches > max_mask_ratio, the sample is untrustworthy.
-        # Flag it with validity; the features of invalid samples are zeroed out.
         validity: torch.Tensor | None = None
         if max_mask_ratio is not None and gap_mask_patch is not None:
-            # Gap ratio within valid_patches
             gap_in_valid = (gap_mask_patch & patch_mask).float().sum(dim=1)
             n_valid = patch_mask.float().sum(dim=1).clamp(min=1.0)
-            mask_ratio_per_sample = gap_in_valid / n_valid  # (B,)
-            validity = mask_ratio_per_sample <= max_mask_ratio  # (B,) bool
+            validity = (gap_in_valid / n_valid) <= max_mask_ratio  # (B,) bool
 
         if pool == "none":
             features = encoded
             if validity is not None:
-                # Features of invalid samples = 0
                 features = features * validity.view(-1, 1, 1).float()
             return (features, validity) if return_validity else features
 
@@ -253,16 +246,14 @@ class DownstreamModelWrapper(nn.Module):
         return (pooled, validity) if return_validity else pooled
 
     @torch.no_grad()
-    def forward_masked(
-        self,
-        batch: PackedBatch,
-    ) -> dict[str, torch.Tensor]:
-        """Wrap the existing forward(task="masked").
+    def forward_masked(self, batch: PackedBatch) -> dict[str, torch.Tensor]:
+        """Run ``model.forward(task="masked")`` on the wrapper's device.
 
         Returns
         -------
-        dict with keys: ``reconstructed``, ``cross_pred``, ``encoded``,
-        ``patch_mask``, ``loc``, ``scale``, etc.
+        dict
+            ``reconstructed``, ``cross_pred_per_type``, ``encoded``, ``patch_mask``,
+            ``loc``, ``scale``, and the rest of the encoder outputs.
         """
         self.model.eval()
         batch = self.batch_to_device(batch)
@@ -272,54 +263,44 @@ class DownstreamModelWrapper(nn.Module):
     def get_reconstruction_loss(
         self,
         batch: PackedBatch,
-        mask: torch.Tensor,  # (B, N) bool — patches to reconstruct
+        mask: torch.Tensor,  # (B, N) bool — patches to score
     ) -> torch.Tensor:
-        """Masked reconstruction MSE loss (for anomaly scoring).
+        """Masked reconstruction MSE, for anomaly scoring.
 
         Parameters
         ----------
         batch:
             PackedBatch produced by PackCollate.
         mask:
-            ``(B, N)`` bool — compute MSE on patches where this is ``True``.
+            ``(B, N)`` bool — compute the MSE over patches where this is True.
 
         Returns
         -------
-        ``()`` — per-window mean MSE scalar.
+        torch.Tensor
+            Scalar mean MSE over the selected patches (0 if none are selected).
         """
         self.model.eval()
         batch = self.batch_to_device(batch)
 
         out = self.model(batch, task="masked")
         reconstructed = out["reconstructed"]  # (B, N, patch_size)
-
-        # Extract original patches (normalized values)
-        normalized = ((batch.values.unsqueeze(-1) - out["loc"]) / out["scale"]).squeeze(
-            -1
-        )  # (b, l)
-        b, l = normalized.shape
-        p = self.patch_size
-        n = l // p
-        original_patches = normalized.reshape(b, n, p)  # (b, n, p)
+        original_patches = out["patches"]  # (B, N, patch_size), normalized
 
         mask = mask.to(self.device)
         if not mask.any():
             return reconstructed.new_tensor(0.0)
 
-        loss = F.mse_loss(
+        return F.mse_loss(
             reconstructed[mask],  # (M, patch_size)
             original_patches[mask],  # (M, patch_size)
         )
-        return loss
 
     def batch_to_device(self, batch: PackedBatch) -> PackedBatch:
-        """Move the PackedBatch tensors to self.device.
+        """Move the PackedBatch tensors to ``self.device``.
 
-        ``values`` is cast to the model parameter dtype. If the downstream loader
-        kept fp16 windows to save memory (run.py), this is the only place they are
-        promoted to the model dtype right before forward, preventing a dtype
-        mismatch. For a batch that is already fp32 (default PackCollate output) this
-        is a no-op, so the pretrain/existing path is unchanged.
+        ``values`` is cast to the model's parameter dtype, so loaders that keep
+        windows in fp16 to save memory are promoted right before the forward pass.
+        A batch that is already fp32 (the PackCollate default) is unaffected.
         """
         param_dtype = next(self.model.parameters()).dtype
         batch.values = batch.values.to(device=self.device, dtype=param_dtype)
@@ -329,12 +310,12 @@ class DownstreamModelWrapper(nn.Module):
 
 
 class LinearProbe(nn.Module):
-    """Lightweight linear head for classification/regression tasks.
+    """Lightweight linear head for classification or regression.
 
     Parameters
     ----------
     d_model:
-        Input feature dimension (foundation model d_model).
+        Input feature dimension (the foundation model's ``d_model``).
     n_classes:
         Number of output classes. ``1`` means regression (no sigmoid).
     dropout_p:
@@ -358,5 +339,5 @@ class LinearProbe(nn.Module):
         self,
         features: torch.Tensor,  # (B, d_model)
     ) -> torch.Tensor:  # (B, n_classes)
-        """Feature -> logits (or regression value)."""
+        """Features -> logits (or regression value)."""
         return self.head(features)

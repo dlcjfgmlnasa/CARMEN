@@ -6,11 +6,11 @@ and runs a forward pass. Use this to confirm the package is wired up correctly.
 
     python examples/00_smoke_test.py
 """
-from _common import make_batch  # adds the repo root to sys.path
+import _common  # noqa: F401 — puts the repo root on sys.path
 
 import torch
 
-from model import CARMEN, ModelConfig
+from carmen import CARMEN, ModelConfig, make_batch
 
 
 def main() -> None:

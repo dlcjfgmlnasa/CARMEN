@@ -12,11 +12,11 @@ The head here is randomly initialized; train it on your own labels.
 import os
 import sys
 
-from _common import make_batch  # adds the repo root to sys.path
+import _common  # noqa: F401 — puts the repo root on sys.path
 
 import torch
 
-from wrapper import DownstreamModelWrapper, LinearProbe
+from carmen import DownstreamModelWrapper, LinearProbe, make_batch
 
 
 def main() -> None:

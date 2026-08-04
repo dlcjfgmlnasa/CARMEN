@@ -1,7 +1,8 @@
 # -*- coding:utf-8 -*-
 """Checkpoint save/load utilities.
 
-Stores the model constructor args in ``config`` so the model can be reconstructed.
+A checkpoint stores the model weights alongside the ``ModelConfig`` used to build
+them, so the architecture can be reconstructed without being specified by hand.
 """
 
 from __future__ import annotations
@@ -16,7 +17,6 @@ from torch import nn
 def save_checkpoint(
     path: str | Path,
     model: nn.Module,
-    optimizer: torch.optim.Optimizer | None = None,
     epoch: int = 0,
     config: dict[str, Any] | None = None,
     **extra: Any,
@@ -29,14 +29,12 @@ def save_checkpoint(
         Save path.
     model:
         Model to save.
-    optimizer:
-        Optimizer (optional).
     epoch:
-        Current epoch number.
+        Epoch number the checkpoint was taken at.
     config:
-        Constructor args needed to reconstruct the model.
+        ``ModelConfig.to_dict()`` — the args needed to reconstruct the model.
     **extra:
-        Additional metadata.
+        Additional metadata to store alongside.
     """
     state: dict[str, Any] = {
         "model_state_dict": model.state_dict(),
@@ -44,8 +42,6 @@ def save_checkpoint(
     }
     if config is not None:
         state["config"] = config
-    if optimizer is not None:
-        state["optimizer_state_dict"] = optimizer.state_dict()
     state.update(extra)
     torch.save(state, path)
 
@@ -53,10 +49,9 @@ def save_checkpoint(
 def load_checkpoint(
     path: str | Path,
     model: nn.Module,
-    optimizer: torch.optim.Optimizer | None = None,
     device: str | torch.device = "cpu",
 ) -> dict[str, Any]:
-    """Load a checkpoint and apply it to the model (and optimizer).
+    """Load a checkpoint into ``model``.
 
     Parameters
     ----------
@@ -64,15 +59,13 @@ def load_checkpoint(
         Checkpoint path.
     model:
         Model to load the state_dict into.
-    optimizer:
-        Optimizer to load the state_dict into (optional).
     device:
         Device to load tensors onto.
 
     Returns
     -------
     dict
-        The full state stored in the checkpoint (epoch, config, extra, etc.).
+        The full state stored in the checkpoint (``epoch``, ``config``, extras).
     """
     state = torch.load(path, map_location=device, weights_only=False)
     missing, unexpected = model.load_state_dict(
@@ -80,9 +73,7 @@ def load_checkpoint(
         strict=False,
     )
     if missing:
-        print(f"  [checkpoint] Missing keys (newly added): {missing}")
+        print(f"  [checkpoint] Missing keys: {missing}")
     if unexpected:
-        print(f"  [checkpoint] Unexpected keys (removed): {unexpected}")
-    if optimizer is not None and "optimizer_state_dict" in state:
-        optimizer.load_state_dict(state["optimizer_state_dict"])
+        print(f"  [checkpoint] Unexpected keys: {unexpected}")
     return state

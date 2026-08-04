@@ -101,8 +101,6 @@ class PatchEmbedding(nn.Module):
     def project(
         self,
         patches: torch.Tensor,  # (batch, num_patches, patch_size)
-        patch_signal_types: torch.Tensor
-        | None = None,  # (batch, num_patches) long — unused, kept for API compat
     ) -> torch.Tensor:  # (batch, num_patches, d_model)
         """Project raw patches to d_model embeddings (Residual MLP)."""
         return self.proj(patches)
@@ -112,7 +110,6 @@ class PatchEmbedding(nn.Module):
         values: torch.Tensor,  # (batch, max_length)
         sample_id: torch.Tensor,  # (batch, max_length) long
         variate_id: torch.Tensor,  # (batch, max_length) long
-        patch_signal_types: torch.Tensor | None = None,  # (batch, num_patches) long
     ) -> tuple[
         torch.Tensor,  # (batch, num_patches, d_model) — patch embeddings
         torch.Tensor,  # (batch, num_patches) long — patch-level sample_id
@@ -125,7 +122,7 @@ class PatchEmbedding(nn.Module):
             sample_id,
             variate_id,
         )
-        embedded = self.project(patches, patch_signal_types)
+        embedded = self.project(patches)
         return embedded, p_sid, p_vid, time_id, patch_mask
 
     # ── Internal patchify methods ──────────────────────────────

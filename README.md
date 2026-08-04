@@ -16,21 +16,22 @@ generation, and forecasting.
 CARMEN is pretrained at **100 Hz** with a patch size of **200 samples (2 s/token)** —
 resample your signals to 100 Hz before use.
 
+This repository is **inference-only**: the pretraining loop is not included.
+
 ## Install
 
 ```bash
-pip install -r requirements.txt   # torch >= 2.2, einops >= 0.7
+pip install -e .            # or: pip install -r requirements.txt
 ```
 
-Then download a checkpoint and place it in `checkpoints/` (see
+Then download a checkpoint into `checkpoints/` (see
 [`checkpoints/README.md`](checkpoints/README.md)). Weights are **not** committed to git.
 
 ## Quickstart
 
 ```python
 import torch
-from wrapper import DownstreamModelWrapper
-from examples._common import make_batch
+from carmen import DownstreamModelWrapper, make_batch
 
 # 1. Load the pretrained encoder (the checkpoint embeds its own config)
 wrapper = DownstreamModelWrapper("checkpoints/carmen.pt", device="cpu")
@@ -53,8 +54,8 @@ randomly initialized model.
 
 ## Inference API
 
-Build the model directly with `from model import CARMEN` (or via
-`DownstreamModelWrapper` for loading + freezing + LoRA). Key methods:
+`CARMEN.from_pretrained(path)` gives you the bare encoder; `DownstreamModelWrapper`
+adds loading + freezing + pooling + LoRA on top. Key methods:
 
 | method                                        | purpose                                             |
 |-----------------------------------------------|-----------------------------------------------------|
@@ -64,6 +65,10 @@ Build the model directly with `from model import CARMEN` (or via
 | `model.generate(batch, n_steps)`              | autoregressive waveform roll-out                    |
 | `wrapper.extract_features(batch, pool=...)`   | frozen features (+ optional gap-masking / pooling)  |
 | `wrapper.inject_lora(rank=8)`                 | parameter-efficient fine-tuning of the encoder      |
+
+`forward(batch, task=...)` takes `task="masked"` (bidirectional attention →
+`reconstructed`, `cross_pred_per_type`) or `task="next_pred"` (causal attention →
+`next_pred`).
 
 ## Examples
 
@@ -84,23 +89,32 @@ python examples/01_extract_features.py checkpoints/carmen.pt
 ## Repository layout
 
 ```
-model/        CARMEN model (biosignal_model.py), ModelConfig, checkpoint I/O
-module/       building blocks — attention (GQA), GLU FFN, RMSNorm/LSCNorm,
-              patch embedding, packed scalers, RoPE / attention bias
-data/         PackCollate (bin-packing), BiosignalSample, signal-type maps
-loss/         create_patch_mask + MaskedPatchLoss (reconstruction scoring)
-wrapper.py    DownstreamModelWrapper (load / freeze / LoRA), LinearProbe
-examples/     runnable examples + quickstart notebook
-checkpoints/  put downloaded weights here (gitignored)
+carmen/
+  model.py         CARMEN encoder + inference API
+  config.py        ModelConfig (embedded in every checkpoint)
+  checkpoint.py    checkpoint save / load
+  wrapper.py       DownstreamModelWrapper (load / freeze / LoRA), LinearProbe
+  batch.py         make_batch / to_device — raw signals -> PackedBatch
+  loss.py          MaskedPatchLoss (reconstruction scoring)
+  data/            PackCollate (bin-packing), BiosignalSample, signal-type maps
+  modules/         building blocks — attention (GQA), GLU FFN, RMSNorm/LSCNorm,
+                   patch embedding, packed scalers, RoPE / attention bias
+examples/          runnable examples + quickstart notebook
+checkpoints/       put downloaded weights here (gitignored)
 ```
 
 ## Notes
 
 - The checkpoint stores `model_state_dict`, `config`, and `epoch`. The embedded
   `config` reconstructs the architecture automatically — you never specify it by hand.
-- Feeding data: build a `BiosignalSample` per channel and collate with `PackCollate`,
-  or use `examples/_common.make_batch`. Channel names map to signal types via
-  `data.spatial_map.CHANNEL_NAME_TO_SIGNAL_TYPE`.
+- Feeding data: `make_batch` covers the common case. For full control, build a
+  `BiosignalSample` per channel and collate with `PackCollate`. Channel names map to
+  signal types via `carmen.CHANNEL_NAME_TO_SIGNAL_TYPE`.
+- In `collate_mode="any_variate"`, `PackCollate` trims a patient's variates to one
+  common length so they pair up across modalities; with unequal-length inputs that
+  length is chosen randomly, so seed `random.seed()` if you need reproducible batches.
+- Reliable cross-modal source/target pairs are listed in
+  `carmen.CROSS_PRED_ALLOWED_PAIRS`.
 
 ## License
 

@@ -9,11 +9,11 @@ you can feed to any downstream head.
 import os
 import sys
 
-from _common import make_batch  # adds the repo root to sys.path
+import _common  # noqa: F401 — puts the repo root on sys.path
 
 import torch
 
-from wrapper import DownstreamModelWrapper
+from carmen import DownstreamModelWrapper, make_batch
 
 
 def main() -> None:

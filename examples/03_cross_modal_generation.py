@@ -4,16 +4,16 @@
     python examples/03_cross_modal_generation.py [path/to/checkpoint.pt]
 
 Generates a target modality's waveform from other modalities. Here: ECG + PPG -> ABP.
-Reliable target/source pairs are listed in ``data.spatial_map.CROSS_PRED_ALLOWED_PAIRS``.
+Reliable source/target pairs are listed in ``carmen.CROSS_PRED_ALLOWED_PAIRS``.
 """
 import os
 import sys
 
-from _common import load_model, make_batch, to_device  # adds repo root to sys.path
+import _common  # noqa: F401 — puts the repo root on sys.path
 
 import torch
 
-from data import SIGNAL_KEY_TO_TYPE
+from carmen import CARMEN, SIGNAL_KEY_TO_TYPE, make_batch, to_device
 
 
 def main() -> None:
@@ -23,7 +23,7 @@ def main() -> None:
         return
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = load_model(ckpt, device)
+    model = CARMEN.from_pretrained(ckpt, device)
 
     # Source signals: 30 s of ECG + PPG at 100 Hz
     t = torch.linspace(0, 30, 3000)

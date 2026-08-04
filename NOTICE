@@ -8,11 +8,12 @@ This product includes software ported and adapted from:
   Licensed under the Apache License, Version 2.0.
 
 The following modules contain code derived from uni2ts:
-  - module/attention.py
-  - module/ffn.py
-  - module/packed_scaler.py
-  - module/position/attn_bias.py
-  - module/position/attn_projection.py
+  - carmen/modules/attention.py
+  - carmen/modules/ffn.py
+  - carmen/modules/packed_scaler.py
+  - carmen/modules/transformer.py
+  - carmen/modules/position/attn_bias.py
+  - carmen/modules/position/attn_projection.py
 
-These files were modified (e.g. RMSNorm as the default norm layer, packed-batch
-scalers, and integration into the CARMEN architecture).
+These files were modified (e.g. RMSNorm as the default norm layer, LSCNorm
+conditioning, packed-batch scalers, and integration into the CARMEN architecture).

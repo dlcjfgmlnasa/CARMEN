@@ -1,29 +1,40 @@
 # -*- coding:utf-8 -*-
-"""Biosignal Foundation Model.
+"""CARMEN — cardiorespiratory foundation model for continuous physiological waveforms.
 
-Pipeline: Scaler -> PatchEmbedding -> SpatialEmbedding -> TransformerEncoder -> Head.
+Encoding pipeline::
+
+    Scaler -> Patchify -> Project -> ModalityEmbed -> LocScale(AdaLN) -> TransformerEncoder -> Head
+
+One Transformer encoder serves every modality. ``task="masked"`` runs bidirectional
+attention (feature extraction, cross-modal generation); ``task="next_pred"`` runs
+causal attention (forecasting, autoregressive generation).
 """
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Callable
 from dataclasses import fields
 from functools import partial
+from pathlib import Path
 
 import torch
 from torch import nn
 
-from data.collate import PackedBatch
-from loss.masked_mse_loss import create_patch_mask
-from model._config import ModelConfig
-from module.packed_scaler import PackedStdScaler, PackedScaler
-from module.patch import PatchEmbedding
-from module.position import BinaryAttentionBias, QueryKeyProjection, RotaryProjection
-from module.transformer import TransformerEncoder
+from carmen.config import ModelConfig
+from carmen.data.collate import PackedBatch
+from carmen.modules.packed_scaler import PackedScaler, PackedStdScaler
+from carmen.modules.patch import PatchEmbedding
+from carmen.modules.position import (
+    BinaryAttentionBias,
+    QueryKeyProjection,
+    RotaryProjection,
+)
+from carmen.modules.transformer import TransformerEncoder
 
 
 class BlockNextHead(nn.Module):
-    """Shared trunk + K horizon-specific heads for Block Next Prediction.
+    """Shared trunk + K horizon-specific heads for block next-patch prediction.
 
     Each position's encoded vector is transformed by a shared non-linear trunk,
     then K independent Linear heads predict the future patch per horizon.
@@ -71,11 +82,10 @@ class BlockNextHead(nn.Module):
 
 
 class CARMEN(nn.Module):
-    """CARMEN — Cardiorespiratory foundation model. Raw-patch reconstruction for all signals.
+    """Cardiorespiratory foundation model. Raw-patch reconstruction for all signals.
 
-    Performs raw patch reconstruction identically for every signal type.
-    ``_encode()`` factors out the common encoding pipeline (Scaler -> Patchify ->
-    Project -> SpatialEmbed -> LocScale -> Encoder) so subclasses can extend it.
+    Every signal type goes through the same raw-patch pipeline. ``_encode()``
+    factors out the common encoding stages so subclasses can extend it.
 
     Parameters
     ----------
@@ -86,7 +96,7 @@ class CARMEN(nn.Module):
     patch_size:
         Patch size (number of time-steps).
     stride:
-        Patch stride (for overlapping). ``None`` means equal to ``patch_size``.
+        Patch stride (for overlapping patches). ``None`` means equal to ``patch_size``.
     num_heads:
         Number of attention heads. ``None`` means ``d_model // 64``.
     num_groups:
@@ -102,21 +112,22 @@ class CARMEN(nn.Module):
     dropout_p:
         Dropout probability.
     num_signal_types:
-        Number of signal types (modalities). v2: 9 (contiguous numbering after
-        PAP removal on 2026-06-23) (ecg=0, abp=1, ppg=2, cvp=3, co2=4, awp=5,
-        icp=6, resp_impedance=7, resp_flow=8).
-    use_spatial_embed:
-        Whether to use the single modality (signal_type) embedding.
-        (The name is kept for backward compatibility — in v2 its meaning is
-        redefined as "modality embedding". The fine-grained spatial_id embedding
-        has been removed.)
+        Number of modalities: 9 — ECG(0), ABP(1), PPG(2), CVP(3), CO2(4), AWP(5),
+        ICP(6), RESP_Impedance(7), RESP_Flow(8).
+    use_modality_embed:
+        Whether to add the per-modality (signal_type) embedding to each token.
     next_block_size:
-        Number of future patches (K) each position predicts in parallel for
-        Block Next Prediction. At each position n, from encoded_causal[n] the
-        raw patches at n+1, n+2, ..., n+K are predicted non-autoregressively and
-        simultaneously.
+        Number of future patches (K) each position predicts in parallel. At position
+        n, the raw patches at n+1 ... n+K are predicted simultaneously (not
+        autoregressively) from ``encoded[n]``.
+    next_head_d_inner:
+        Inner dimension of ``BlockNextHead``'s trunk. ``None`` means ``d_model``.
     contrastive_proj_dim:
-        Output dim of the contrastive projection head. 0 disables it.
+        Output dim of the pretraining contrastive projection head. 0 disables it.
+        Inference never uses it; it is kept so pretrained checkpoints load with no
+        missing/unexpected keys.
+    d_cond:
+        Width of the (loc, scale) conditioning vector fed to every LSCNorm.
     """
 
     def __init__(
@@ -132,34 +143,30 @@ class CARMEN(nn.Module):
         use_var_attn_bias: bool = True,
         scaler: PackedScaler | None = None,
         dropout_p: float = 0.0,
-        # v2 single modality embedding: ECG0, ABP1, PPG2, CVP3, CO24, AWP5, ICP6,
-        # RESP_Impedance7, RESP_Flow8 (9 contiguous types after PAP removal 2026-06-23).
         num_signal_types: int = 9,
-        use_spatial_embed: bool = True,
+        use_modality_embed: bool = True,
         next_block_size: int = 4,
         next_head_d_inner: int | None = None,
         contrastive_proj_dim: int = 0,
         d_cond: int = 16,
-        use_lscnorm: bool = True,
     ) -> None:
         super().__init__()
         self.d_model = d_model
         self.patch_size = patch_size
         self.num_signal_types = num_signal_types
-        # d_cond: AdaLN modulation input dim (overridable hyperparameter).
         self.d_cond = d_cond
 
         # 1. Scaler (point-level)
         self.scaler = scaler or PackedStdScaler()
 
-        # 2. Patch Embedding
+        # 2. Patch embedding
         self.patch_embed = PatchEmbedding(
             patch_size=patch_size,
             d_model=d_model,
             stride=stride,
         )
 
-        # 3. Transformer Encoder
+        # 3. Transformer encoder
         num_heads = num_heads or d_model // 64
 
         var_attn_bias_layer: Callable | None = None
@@ -185,33 +192,26 @@ class CARMEN(nn.Module):
             d_cond=self.d_cond,
         )
 
-        # 4. Modality Embedding (v2: single signal_type embedding)
-        # The fine-grained spatial_id embedding is removed — only a single per-modality
-        # (signal_type) embedding is used.
-        # (The use_spatial_embed name is kept for backward compatibility; its meaning is
-        # redefined as modality embedding.)
-        self.use_spatial_embed = use_spatial_embed
-        if use_spatial_embed:
+        # 4. Modality embedding (one embedding per signal_type)
+        self.use_modality_embed = use_modality_embed
+        if use_modality_embed:
             self.signal_type_embed = nn.Embedding(num_signal_types, d_model)
 
-        # 5. Loc/Scale AdaLN Conditioning (preserve per-patient absolute-level info)
-        # (loc, scale) 2D scalar -> d_cond conditioning vector -> LSCNorm modulation
-        # input of every encoder layer. MLP(2 -> d_cond -> d_cond) — a non-linearity
-        # gives it expressiveness.
+        # 5. Loc/scale AdaLN conditioning (preserves per-patient absolute-level info).
+        # (loc, scale) -> d_cond vector -> LSCNorm modulation input of every encoder
+        # layer. The non-linearity is what gives the conditioning its expressiveness.
         self.cond_proj = nn.Sequential(
             nn.Linear(2, self.d_cond),
             nn.SiLU(),
             nn.Linear(self.d_cond, self.d_cond),
         )
 
-        # 6. Reconstruction Head (reconstruct own variate)
+        # 6. Reconstruction head (reconstruct own variate)
         self.head = nn.Linear(d_model, patch_size)
 
-        # 7. Block Next-Patch Prediction Head (shared trunk + K horizon-specific heads)
-        # - trunk: non-linear transform shared across all horizons (Linear+GELU)
-        # - heads: K independent Linear projections (one per horizon)
-        # A non-linearity + per-horizon specialization improves long-range prediction
-        # quality over a single Linear(d, K*P).
+        # 7. Block next-patch prediction head (shared trunk + K horizon heads).
+        # A non-linear trunk plus per-horizon specialization predicts long horizons
+        # better than a single Linear(d_model, K * patch_size).
         self.next_block_size = next_block_size
         self.next_head = BlockNextHead(
             d_model=d_model,
@@ -220,13 +220,13 @@ class CARMEN(nn.Module):
             d_inner=next_head_d_inner,
         )
 
-        # 8. Cross-Modal Prediction Heads (independent Linear per target signal type)
+        # 8. Cross-modal prediction heads (one Linear per target signal type)
         self.cross_heads = nn.ModuleDict({
             str(st): nn.Linear(d_model, patch_size)
             for st in range(num_signal_types)
         })
 
-        # 9. Contrastive Projection Head (SimCLR-style 2-layer MLP)
+        # 9. Contrastive projection head (pretraining only; see the class docstring)
         self.contrastive_proj_dim = contrastive_proj_dim
         if contrastive_proj_dim > 0:
             self.contrastive_proj = nn.Sequential(
@@ -235,71 +235,12 @@ class CARMEN(nn.Module):
                 nn.Linear(d_model, contrastive_proj_dim),
             )
 
-        # 10. Learnable [MASK] Token
+        # 10. Learnable [MASK] token
         self.mask_token = nn.Parameter(torch.randn(1, 1, d_model) * 0.02)
-
-        # 11. (Ablation) Disable LSCNorm — zero-freeze cond_proj and every
-        # LSCNorm.modulation so the forward pass matches plain RMSNorm (gamma=0, beta=0).
-        # The model structure is left intact; only parameters are frozen, keeping
-        # checkpoint compatibility.
-        self.use_lscnorm = use_lscnorm
-        if not use_lscnorm:
-            self._disable_lscnorm_modulation()
-
-    def _disable_lscnorm_modulation(self) -> None:
-        """Ablation: fix cond_proj and every LSCNorm.modulation to 0.
-
-        Result: encoder LSCNorm output = norm(x) * (1+0) + 0 = norm(x) = plain RMSNorm.
-        """
-        from module.norm import LSCNorm
-
-        # Force cond_proj output to always be 0 (Linear(0)=bias=0, SiLU(0)=0, Linear(0)=bias=0)
-        for p in self.cond_proj.parameters():
-            p.data.zero_()
-            p.requires_grad = False
-
-        # Freeze every LSCNorm.modulation to 0
-        for m in self.modules():
-            if isinstance(m, LSCNorm):
-                m.modulation.weight.data.zero_()
-                m.modulation.bias.data.zero_()
-                m.modulation.weight.requires_grad = False
-                m.modulation.bias.requires_grad = False
-
-    @staticmethod
-    def _sample_variate_drop(
-        p_sid: torch.Tensor,  # (B, N)
-        p_vid: torch.Tensor,  # (B, N)
-        patch_mask: torch.Tensor,  # (B, N)
-        drop_prob: float,
-    ) -> torch.Tensor | None:
-        """Complete Variate Dropout: fully remove one variate per row from attention.
-
-        Returns a (B, N) bool mask — True = dropped from attention.
-        Only acts on rows with 2+ variates. None if nothing was dropped.
-        """
-        b, n = p_vid.shape
-        drop_mask = torch.zeros(b, n, dtype=torch.bool, device=p_vid.device)
-        any_dropped = False
-        for bi in range(b):
-            if torch.rand(1).item() >= drop_prob:
-                continue
-            valid = patch_mask[bi]
-            valid_vids = p_vid[bi][valid]
-            unique_vids = valid_vids[valid_vids > 0].unique()
-            if len(unique_vids) < 2:
-                continue  # single variate -> dropout not possible
-            # Pick one at random
-            chosen = unique_vids[torch.randint(len(unique_vids), (1,))]
-            drop_mask[bi] = (p_vid[bi] == chosen) & valid
-            any_dropped = True
-        return drop_mask if any_dropped else None
 
     @classmethod
     def from_config(cls, config: ModelConfig) -> CARMEN:
         """Create a model instance from a ModelConfig."""
-        import inspect
-
         valid_params = set(inspect.signature(cls.__init__).parameters.keys()) - {"self"}
         kwargs = {
             f.name: getattr(config, f.name)
@@ -308,45 +249,66 @@ class CARMEN(nn.Module):
         }
         return cls(**kwargs)
 
-    # ── Encode Pipeline ────────────────────────────────────────────
+    @classmethod
+    def from_pretrained(
+        cls,
+        checkpoint_path: str | Path,
+        device: str | torch.device = "cpu",
+    ) -> CARMEN:
+        """Load a pretrained CARMEN from a checkpoint, in eval mode.
+
+        The checkpoint embeds its own ``ModelConfig``, so the architecture is
+        rebuilt automatically. Use ``DownstreamModelWrapper`` instead when you also
+        want freezing, pooling, or LoRA.
+        """
+        state = torch.load(checkpoint_path, map_location=device, weights_only=False)
+        if "config" not in state:
+            raise ValueError(f"Checkpoint has no 'config' key: {checkpoint_path}")
+        model = cls.from_config(ModelConfig.from_dict(state["config"]))
+        missing, unexpected = model.load_state_dict(
+            state["model_state_dict"], strict=False
+        )
+        if missing:
+            print(f"  [CARMEN] Missing keys: {missing}")
+        if unexpected:
+            print(f"  [CARMEN] Unexpected keys: {unexpected}")
+        return model.to(device).eval()
+
+    # ── Encode pipeline ────────────────────────────────────────────
 
     def _encode(
         self,
         batch: PackedBatch,
         task: str = "masked",
-        mask_ratio: float = 0.0,
-        block_mask: bool = False,
-        block_size_min: int = 3,
-        block_size_max: int = 8,
-        variate_mask_prob: float = 0.0,
-        variate_drop_prob: float = 0.0,
         extra_content_mask: torch.Tensor | None = None,
     ) -> dict[str, torch.Tensor]:
-        """Common encoding pipeline: Scaler -> Patchify -> Project -> SpatialEmbed -> LocScale -> Encoder.
+        """Common encoding pipeline.
 
         Parameters
         ----------
         batch:
             PackedBatch produced by PackCollate.
         task:
-            ``"masked"``: bidirectional attention.
-            ``"next_pred"``: causal attention.
-            ``"both"``: bidirectional + causal at once (encoder called twice,
-            compatible with a single DDP forward).
+            ``"masked"`` for bidirectional attention, ``"next_pred"`` for causal.
+        extra_content_mask:
+            ``(B, N)`` bool — patch positions whose content is replaced by the
+            learned [MASK] token. Used to blank out data gaps (NaN-filled regions)
+            while keeping their modality / loc / scale conditioning intact.
 
         Returns
         -------
         dict with keys:
-            ``encoded``: ``(B, N, d_model)`` — bidirectionally encoded patch reps (task="both"/"masked").
-            ``encoded_causal``: ``(B, N, d_model)`` — causal encoding (only when task="both").
-            ``patches``: ``(B, N, patch_size)`` — raw patches.
+            ``encoded``: ``(B, N, d_model)`` — encoded patch representations.
+            ``patches``: ``(B, N, patch_size)`` — raw (normalized) patches.
             ``patch_signal_types``: ``(B, N)`` — per-patch signal type.
             ``loc``: ``(B, L, 1)`` — per-variate location.
             ``scale``: ``(B, L, 1)`` — per-variate scale.
             ``patch_mask``: ``(B, N)`` — valid-patch mask.
             ``patch_sample_id``: ``(B, N)`` — per-patch sample_id.
             ``patch_variate_id``: ``(B, N)`` — per-patch variate_id.
-            ``time_id``: ``(B, N)`` — per-patch time index.
+            ``time_id``: ``(B, N)`` — patch index within its variate (drives RoPE).
+            ``abs_time_id``: ``(B, N)`` — absolute-time bucket, shared by patches of
+            different variates that cover the same physical time.
         """
         # 1. Scaler: point-level normalization
         values = batch.values.unsqueeze(-1)  # (B, L, 1)
@@ -366,8 +328,9 @@ class CARMEN(nn.Module):
         b = patches.shape[0]
         device = patches.device
 
-        # 3. Compute global_var_idx — reused by both the CNN stem and modality embedding
+        # 3. Per-patch signal type + absolute time id
         patch_signal_types: torch.Tensor | None = None
+        abs_time_id = time_id  # fallback when signal types are unavailable
 
         if batch.signal_types is not None:
             per_row_max_var = p_vid.max(dim=-1).values  # (B,)
@@ -379,39 +342,27 @@ class CARMEN(nn.Module):
 
             patch_signal_types = batch.signal_types.to(device)[global_var_idx]  # (B, N)
 
-            # Compute absolute-time-based abs_time_id (for cross-modal matching only).
-            # time_id (relative) is kept for RoPE; abs_time_id is for the cross-modal loss.
-            #
-            # Within the same sample_id, subtract the minimum absolute time to get a
-            # bucket-relative offset -> quantize by patch_size.
-            # -> patches of different variates at the same physical time get the same abs_time_id.
-            abs_time_id = time_id  # fallback
-            if (
-                hasattr(batch, "start_samples")
-                and batch.start_samples is not None
-            ):
+            # abs_time_id: quantize absolute time by patch_size so patches of
+            # different variates covering the same physical time share an id.
+            # time_id stays variate-relative because RoPE needs it that way.
+            if getattr(batch, "start_samples", None) is not None:
                 patch_start = batch.start_samples.to(device)[global_var_idx]  # (B, N)
                 abs_time = patch_start + time_id * self.patch_size  # (B, N)
-                # Quantize by patch_size — patches at the same physical time match exactly
                 abs_time_id = abs_time // self.patch_size  # (B, N)
                 abs_time_id[~patch_mask] = 0
 
-        # 4. Projection (linear or CNN stem) — produces only the patch-content representation
-        patch_embed = self.patch_embed.project(patches, patch_signal_types)
-        # patch_embed: (B, N, d_model)
+        # 4. Projection — patch content representation only
+        patch_embed = self.patch_embed.project(patches)  # (B, N, d_model)
 
-        # Padding mask (p_vid==0 is a padding token)
+        # Padding mask (p_vid == 0 is a padding token)
         valid_token = (p_vid > 0).unsqueeze(-1)  # (B, N, 1)
 
-        # 5-6. Compute conditioning embedding (signal_type modality + loc + scale)
-        # Computed separately so it survives even if mask_token overwrites patch content.
-        # After applying the mask it is added back, so masked positions still keep their
-        # own signal-type/level information.
+        # 5. Conditioning, computed separately from patch content so that masked
+        # positions still carry their own modality / level information after the
+        # [MASK] token overwrites the content.
         cond = torch.zeros_like(patch_embed)
-        if self.use_spatial_embed and patch_signal_types is not None:
-            # v2: add only the single modality (signal_type) embedding. spatial_id embedding removed.
-            sig_emb = self.signal_type_embed(patch_signal_types)  # (B, N, d_model)
-            cond = cond + sig_emb
+        if self.use_modality_embed and patch_signal_types is not None:
+            cond = cond + self.signal_type_embed(patch_signal_types)  # (B, N, d_model)
 
         n = patch_embed.shape[1]
         stride = self.patch_embed.stride
@@ -420,58 +371,39 @@ class CARMEN(nn.Module):
         patch_loc = loc[:, patch_starts, :]  # (B, N, 1)
         patch_scale = scale[:, patch_starts, :]  # (B, N, 1)
 
-        # AdaLN: loc/scale -> cond_proj -> LSCNorm modulation input of every encoder layer
+        # AdaLN: loc/scale -> cond_proj -> LSCNorm modulation of every encoder layer
         loc_scale = torch.cat([patch_loc, patch_scale], dim=-1)  # (B, N, 2)
         ada_cond = self.cond_proj(loc_scale)  # (B, N, d_cond)
         ada_cond = ada_cond * valid_token  # padding positions -> 0
-        cond = cond * valid_token  # only signal_type + spatial_id added to the token
+        cond = cond * valid_token
 
-        # 7. Build Pred Mask (random/block/variate-level)
-        pred_mask: torch.Tensor | None = None
-        if mask_ratio > 0 and task in ("masked", "both"):
-            pred_mask = create_patch_mask(
-                patch_mask,
-                mask_ratio=mask_ratio,
-                patch_variate_id=p_vid if variate_mask_prob > 0 else None,
-                variate_mask_prob=variate_mask_prob,
-                block_mask=block_mask,
-                block_size_min=block_size_min,
-                block_size_max=block_size_max,
-            )
-
-        # 8. Base Attention Mask: attend only within the same sample + only valid patches
-        base_attn_mask = (
+        # 6. Base attention mask: attend only within the same sample, valid patches only
+        attn_mask = (
             (p_sid.unsqueeze(-1) == p_sid.unsqueeze(-2))
             & patch_mask.unsqueeze(-2)
             & patch_mask.unsqueeze(-1)
-        )  # (B, N, n)
+        )  # (B, N, N)
+        if task == "next_pred":
+            causal_tri = torch.tril(torch.ones(n, n, dtype=torch.bool, device=device))
+            attn_mask = attn_mask & causal_tri.unsqueeze(0)
 
-        # 8.5. Complete Variate Dropout: physically remove a variate from attention
-        # -> during training the model experiences the "cross-pred without this variate" scenario
-        # -> closes the train-inference gap for zero-shot cross-modal generation
-        drop_mask: torch.Tensor | None = None
-        if variate_drop_prob > 0 and self.training and task in ("masked", "both"):
-            drop_mask = self._sample_variate_drop(
-                p_sid, p_vid, patch_mask, variate_drop_prob
-            )  # (B, N) bool — True = removed from attention
-            if drop_mask is not None:
-                keep = ~drop_mask  # (B, N)
-                # Remove from attention: dropped tokens can neither attend nor be attended to
-                base_attn_mask = base_attn_mask & keep.unsqueeze(-1) & keep.unsqueeze(-2)
+        # 7. Encoder input: [MASK]-replace the requested positions, then add conditioning
+        x = patch_embed
+        if extra_content_mask is not None:
+            mask_token = self.mask_token.expand_as(patch_embed)
+            x = torch.where(extra_content_mask.unsqueeze(-1), mask_token, patch_embed)
+        x = x + cond
 
-        # 9. Encoder-input builder helper
-        # Replace patch content with mask_token (at content_mask positions) -> add conditioning.
-        # This keeps signal_type/spatial/loc/scale info at masked/dropped positions.
-        def _make_input(content_mask: torch.Tensor | None) -> torch.Tensor:
-            if content_mask is None:
-                x = patch_embed
-            else:
-                mt = self.mask_token.expand_as(patch_embed)
-                x = torch.where(content_mask.unsqueeze(-1), mt, patch_embed)
-            return x + cond
+        encoded = self.encoder(
+            x,
+            attn_mask=attn_mask,
+            var_id=p_vid,
+            time_id=time_id,  # RoPE uses the variate-relative index
+            cond=ada_cond,
+        )
 
-        # 10. Encoder call depending on task
-        result: dict[str, torch.Tensor] = {
+        return {
+            "encoded": encoded,
             "patches": patches,
             "patch_signal_types": patch_signal_types,
             "loc": loc,
@@ -479,125 +411,69 @@ class CARMEN(nn.Module):
             "patch_mask": patch_mask,
             "patch_sample_id": p_sid,
             "patch_variate_id": p_vid,
-            "time_id": time_id,          # relative (for RoPE)
-            "abs_time_id": abs_time_id,  # absolute (for cross-modal matching)
-            "pred_mask": pred_mask,
+            "time_id": time_id,
+            "abs_time_id": abs_time_id,
         }
-
-        encoder_kwargs = dict(
-            var_id=p_vid, time_id=time_id, cond=ada_cond,
-        )  # RoPE uses relative time_id; cond is for AdaLN (ignored if None)
-        use_causal = task in ("next_pred", "both")
-
-        # causal mask (shared by next_pred and both)
-        if use_causal:
-            causal_tri = torch.tril(torch.ones(n, n, dtype=torch.bool, device=device))
-            causal_mask = base_attn_mask & causal_tri.unsqueeze(0)  # (B, N, N)
-
-        # bidirectional input: replace pred_mask | drop_mask positions with mask_token
-        bi_content_mask = drop_mask
-        if pred_mask is not None:
-            bi_content_mask = (
-                pred_mask if bi_content_mask is None else (pred_mask | bi_content_mask)
-            )
-        # Downstream gap masking: replace patch positions that were NaN->0 filled during
-        # data prep with mask_token (a downstream-finetune-only path).
-        if extra_content_mask is not None:
-            bi_content_mask = (
-                extra_content_mask if bi_content_mask is None
-                else (extra_content_mask | bi_content_mask)
-            )
-
-        if task == "both":
-            result["encoded"] = self.encoder(
-                _make_input(bi_content_mask),
-                attn_mask=base_attn_mask,
-                **encoder_kwargs,
-            )
-            # causal: apply drop_mask only (causal attention already blocks future info,
-            # so pred_mask is unnecessary).
-            result["encoded_causal"] = self.encoder(
-                _make_input(drop_mask),
-                attn_mask=causal_mask,
-                **encoder_kwargs,
-            )
-        elif task == "next_pred":
-            result["encoded"] = self.encoder(
-                _make_input(drop_mask),
-                attn_mask=causal_mask,
-                **encoder_kwargs,
-            )
-        else:  # "masked"
-            result["encoded"] = self.encoder(
-                _make_input(bi_content_mask),
-                attn_mask=base_attn_mask,
-                **encoder_kwargs,
-            )
-
-        return result
 
     # ── Forward ────────────────────────────────────────────────────
 
     def forward(
         self,
         batch: PackedBatch,
-        task: str = "masked",  # "masked" or "next_pred"
-        mask_ratio: float = 0.0,
-        block_mask: bool = False,
-        block_size_min: int = 3,
-        block_size_max: int = 8,
-        variate_mask_prob: float = 0.0,
-        variate_drop_prob: float = 0.0,
+        task: str = "masked",
         extra_content_mask: torch.Tensor | None = None,
     ) -> dict[str, torch.Tensor]:
-        enc = self._encode(
-            batch,
-            task=task,
-            mask_ratio=mask_ratio,
-            block_mask=block_mask,
-            block_size_min=block_size_min,
-            block_size_max=block_size_max,
-            variate_mask_prob=variate_mask_prob,
-            variate_drop_prob=variate_drop_prob,
-            extra_content_mask=extra_content_mask,
-        )
+        """Run the encoder and the heads selected by ``task``.
 
-        encoded = enc["encoded"]  # bidirectional (or sole encoding for single-task)
-        patch_signal_types = enc["patch_signal_types"]  # (B, N) or None
+        Parameters
+        ----------
+        batch:
+            PackedBatch produced by PackCollate.
+        task:
+            ``"masked"`` — bidirectional attention; adds ``reconstructed`` and
+            ``cross_pred_per_type``.
+            ``"next_pred"`` — causal attention; adds ``next_pred``.
+        extra_content_mask:
+            ``(B, N)`` bool — patch positions to replace with the [MASK] token.
+
+        Returns
+        -------
+        dict
+            Everything ``_encode`` returns — except that ``time_id`` here carries
+            ``abs_time_id`` (the absolute-time bucket used to pair modalities) —
+            plus the task-specific head outputs.
+        """
+        enc = self._encode(batch, task=task, extra_content_mask=extra_content_mask)
+        encoded = enc["encoded"]  # (B, N, d_model)
 
         out_dict: dict[str, torch.Tensor] = {
             "encoded": encoded,
             "patches": enc["patches"],
-            "patch_signal_types": patch_signal_types,
+            "patch_signal_types": enc["patch_signal_types"],
             "loc": enc["loc"],
             "scale": enc["scale"],
             "patch_mask": enc["patch_mask"],
             "patch_sample_id": enc["patch_sample_id"],
             "patch_variate_id": enc["patch_variate_id"],
-            "time_id": enc["abs_time_id"],  # for cross-modal matching (absolute time)
-            "pred_mask": enc["pred_mask"],
+            "time_id": enc["abs_time_id"],  # absolute time, for cross-modal matching
         }
 
-        # ── Masked Reconstruction ──
-        if task in ("masked", "both"):
+        if task == "masked":
+            # ── Masked reconstruction ──
             out_dict["reconstructed"] = self.head(encoded)  # (B, N, patch_size)
-            # Per-target-type cross-modal prediction (separate heads)
-            cross_pred_per_type = torch.stack([
+            # Cross-modal prediction, one head per target type
+            out_dict["cross_pred_per_type"] = torch.stack([
                 self.cross_heads[str(st)](encoded)
                 for st in range(self.num_signal_types)
             ], dim=2)  # (B, N, num_signal_types, patch_size)
-            out_dict["cross_pred_per_type"] = cross_pred_per_type
             if self.contrastive_proj_dim > 0:
-                out_dict["contrastive_z"] = self.contrastive_proj(
-                    encoded
-                )  # (B, N, proj_dim)
-
-        # ── Block Next-Patch Prediction ──
-        # encoded_causal[n] -> K future raw patches (n+1, ..., n+K) predicted in parallel.
-        # BlockNextHead (shared trunk + K heads) directly returns (B, N, K, P).
-        if task in ("next_pred", "both"):
-            encoded_for_next = enc.get("encoded_causal", encoded)  # (B, N, d_model)
-            out_dict["next_pred"] = self.next_head(encoded_for_next)  # (B, N, K, P)
+                out_dict["contrastive_z"] = self.contrastive_proj(encoded)
+        elif task == "next_pred":
+            # ── Block next-patch prediction ──
+            # encoded[n] -> the K future patches n+1 ... n+K, predicted in parallel.
+            out_dict["next_pred"] = self.next_head(encoded)  # (B, N, K, patch_size)
+        else:
+            raise ValueError(f'task must be "masked" or "next_pred", got {task!r}')
 
         return out_dict
 
@@ -631,20 +507,22 @@ class CARMEN(nn.Module):
         target_signal_type: int,
         denormalize: bool = True,
     ) -> dict[str, torch.Tensor]:
-        """Zero-shot cross-modal waveform generation (Virtual Token Injection).
+        """Zero-shot cross-modal waveform generation.
 
         Generate the waveform of ``target_signal_type`` from the source signals in
-        ``batch``. A [MASK] virtual token is injected at the target variate,
-        reproducing the same situation as variate dropout during training.
+        ``batch``, using the cross-modal head trained for that target.
 
         Parameters
         ----------
         batch:
             PackedBatch containing only source signals.
         target_signal_type:
-            Target signal type to generate (0=ECG, 1=ABP, 2=PPG, ...).
+            Target signal type to generate (0=ECG, 1=ABP, 2=PPG, ...). Reliable
+            source/target pairs are listed in
+            ``carmen.data.signal_types.CROSS_PRED_ALLOWED_PAIRS``.
         denormalize:
-            If ``True``, denormalize with the source loc/scale (approximate).
+            If ``True``, denormalize with the source loc/scale (approximate — the
+            target's own level is unknown).
 
         Returns
         -------
@@ -653,9 +531,7 @@ class CARMEN(nn.Module):
             ``patch_mask``: ``(B, N)`` — valid-patch mask.
         """
         self.eval()
-
-        # Forward (mask_ratio=0 -> use pure source info with no masking)
-        out = self.forward(batch, task="masked", mask_ratio=0.0)
+        out = self.forward(batch, task="masked")
 
         cross_pred_per_type = out["cross_pred_per_type"]  # (B, N, T, P)
         target_pred = cross_pred_per_type[:, :, target_signal_type, :]  # (B, N, P)
@@ -663,7 +539,6 @@ class CARMEN(nn.Module):
         if denormalize:
             loc = out["loc"]  # (B, L, 1)
             scale = out["scale"]  # (B, L, 1)
-            p = self.patch_size
             stride = self.patch_embed.stride
             n = target_pred.shape[1]
             patch_starts = torch.arange(n, device=loc.device) * stride
@@ -707,12 +582,10 @@ class CARMEN(nn.Module):
             loc = out["loc"]  # (B, L, 1)
             scale = out["scale"]  # (B, L, 1)
             p = self.patch_size
-            patch_loc = loc[:, ::p, :]  # (B, N_approx, 1)
-            patch_scale = scale[:, ::p, :]  # (B, N_approx, 1)
             n = pred.shape[1]
-            patch_loc = patch_loc[:, :n, :]  # (B, N, 1)
-            patch_scale = patch_scale[:, :n, :]  # (B, N, 1)
-            # Broadcast over K dimension
+            patch_loc = loc[:, ::p, :][:, :n, :]  # (B, N, 1)
+            patch_scale = scale[:, ::p, :][:, :n, :]  # (B, N, 1)
+            # Broadcast over the K dimension
             pred = pred * patch_scale.unsqueeze(2) + patch_loc.unsqueeze(2)
 
         return pred
@@ -726,9 +599,9 @@ class CARMEN(nn.Module):
     ) -> torch.Tensor:
         """Block-autoregressive multi-step generation.
 
-        The Block Next Prediction head emits K patches in one shot, so each forward
-        takes all K, appends them to the input, forwards again, and repeats.
-        Assumes ``collate_mode="ci"`` (single-variate-per-row).
+        The block next-prediction head emits K patches per forward, so each step
+        takes all K, appends them to the input, and forwards again.
+        Assumes ``collate_mode="ci"`` (one variate per row).
 
         Parameters
         ----------
@@ -758,27 +631,25 @@ class CARMEN(nn.Module):
         pred = out["next_pred"]  # (B, N, K, patch_size)
         patch_mask = out["patch_mask"]  # (B, N)
         b = pred.shape[0]
-        last_valid_idx = patch_mask.sum(dim=-1) - 1  # (B,)
-        last_valid_idx = last_valid_idx.clamp(min=0)
+        last_valid_idx = (patch_mask.sum(dim=-1) - 1).clamp(min=0)  # (B,)
         arange_b = torch.arange(b, device=pred.device)
         block = pred[arange_b, last_valid_idx]  # (B, K, patch_size)
 
-        # Append the K patches from one forward in order.
+        # Take the K patches from this forward in order.
         for j in range(k):
             if len(generated) >= n_steps:
                 break
             generated.append(block[:, j, :])  # (B, patch_size)
 
         while len(generated) < n_steps:
-            # Append all K patches of the block to the input -> new prediction next forward.
+            # Append the whole K-patch block to the input, then predict again.
             for j in range(k):
                 batch = _append_patch_to_batch(batch, block[:, j, :], p)
 
             out = self.forward(batch, task="next_pred")
             pred = out["next_pred"]  # (B, N, K, patch_size)
             patch_mask = out["patch_mask"]
-            last_valid_idx = patch_mask.sum(dim=-1) - 1
-            last_valid_idx = last_valid_idx.clamp(min=0)
+            last_valid_idx = (patch_mask.sum(dim=-1) - 1).clamp(min=0)
             block = pred[arange_b, last_valid_idx]  # (B, K, patch_size)
             for j in range(k):
                 if len(generated) >= n_steps:
@@ -802,7 +673,7 @@ def _append_patch_to_batch(
 ) -> PackedBatch:
     """Append a new patch to a PackedBatch.
 
-    Assumes single-variate-per-row. Extends right padding if max_length is exceeded.
+    Assumes one variate per row. Extends the right padding if max_length is exceeded.
 
     Parameters
     ----------

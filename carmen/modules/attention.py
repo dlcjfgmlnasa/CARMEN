@@ -20,30 +20,6 @@ from .norm import RMSNorm
 from .position import AttentionBias, QueryKeyProjection
 
 
-def native_scaled_dot_product_attention(
-    query: torch.Tensor,  # (*batch, group, hpg, q_len, dim)
-    key: torch.Tensor,  # (*batch, group, hpg, kv_len, dim)
-    value: torch.Tensor,  # (*batch, group, hpg, kv_len, dim)
-    attn_mask: torch.Tensor
-    | None = None,  # (*batch, #group, #hpg, q_len, kv_len) bool|float
-    dropout_p: float = 0.0,
-    scale: float | None = None,
-) -> torch.Tensor:  # (*batch, group, hpg, q_len, dim)
-    """Fallback scaled dot-product attention (used when FlashAttention is unavailable)."""
-    scale_factor = 1 / math.sqrt(query.size(-1)) if scale is None else scale
-    attn_weight = query @ key.transpose(-2, -1) * scale_factor
-    if attn_mask is not None:
-        if attn_mask.dtype == torch.bool:
-            attn_bias = torch.zeros_like(attn_weight)
-            attn_bias.masked_fill_(attn_mask.logical_not(), float("-inf"))
-        else:
-            attn_bias = attn_mask
-        attn_weight = attn_weight + attn_bias
-    attn_weight = torch.softmax(attn_weight, dim=-1)
-    attn_weight = torch.dropout(attn_weight, dropout_p, train=True)
-    return attn_weight @ value
-
-
 class GroupedQueryAttention(nn.Module):
     """Grouped Query Attention.
 

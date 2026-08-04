@@ -9,9 +9,11 @@ the full (B, N, K, patch_size) prediction map; ``generate`` rolls it out autoreg
 import os
 import sys
 
-from _common import load_model, make_batch, to_device  # adds repo root to sys.path
+import _common  # noqa: F401 — puts the repo root on sys.path
 
 import torch
+
+from carmen import CARMEN, make_batch, to_device
 
 
 def main() -> None:
@@ -21,7 +23,7 @@ def main() -> None:
         return
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = load_model(ckpt, device)
+    model = CARMEN.from_pretrained(ckpt, device)
 
     # A single channel (channel-independent) — 30 s of ECG at 100 Hz
     t = torch.linspace(0, 30, 3000)

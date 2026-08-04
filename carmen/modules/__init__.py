@@ -1,7 +1,8 @@
 # -*- coding:utf-8 -*-
+"""Reusable building blocks of the CARMEN encoder."""
 from __future__ import annotations
 
-from .norm import RMSNorm
+from .norm import LSCNorm, RMSNorm
 from .attention import GroupedQueryAttention, MultiHeadAttention, MultiQueryAttention
 from .ffn import FeedForward, GatedLinearUnitFeedForward
 from .packed_scaler import (

@@ -33,7 +33,7 @@ class BiosignalSample:
         Start offset (in samples) of this window within the recording.
     signal_type:
         Modality code (0=ECG, 1=ABP, 2=PPG, 3=CVP, 4=CO2, 5=AWP, 6=ICP,
-        7=RESP_Impedance, 8=RESP_Flow). See ``data.spatial_map``.
+        7=RESP_Impedance, 8=RESP_Flow). See ``carmen.data.signal_types``.
     session_id:
         Session identifier. Samples that share a ``session_id`` and fall in the
         same time slot are grouped together (cross-modal) by ``PackCollate`` in

@@ -67,9 +67,10 @@ class LSCNorm(nn.Module):
     layer initially behaves identically to plain RMSNorm — safe to swap into
     a pretrained encoder.
 
-    The conditioning path is ALWAYS active during forward, so gradients flow
-    from loss → modulation → cond regardless of whether the model "wants" to
-    use cond — unlike additive embeddings which can be silently ignored.
+    In CARMEN, ``cond`` carries the per-patch (loc, scale) of the signal, so every
+    layer sees the absolute level that normalization stripped out. Unlike an
+    additive embedding, which a network can learn to ignore, this modulation sits
+    on the main path and always affects the output.
     """
 
     def __init__(

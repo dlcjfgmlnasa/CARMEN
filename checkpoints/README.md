@@ -44,4 +44,4 @@ Each checkpoint is a `torch.save` dict with at least:
 | `epoch`            | training epoch the checkpoint was taken at                     |
 
 Because `config` is embedded, you never have to specify the architecture by hand —
-`DownstreamModelWrapper` / `load_checkpoint` reconstruct it automatically.
+`CARMEN.from_pretrained` / `DownstreamModelWrapper` reconstruct it automatically.

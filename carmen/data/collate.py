@@ -9,7 +9,7 @@ from dataclasses import dataclass
 
 import torch
 
-from data.dataset import BiosignalSample
+from carmen.data.sample import BiosignalSample
 
 
 @dataclass
@@ -82,8 +82,20 @@ class PackCollate:
         Fixed patch size.
     stride:
         Patch stride (supports overlapping). Used together with ``patch_size``.
+    slot_size:
+        Width of the time slot used to group cross-modal signals of one session.
+    min_patches:
+        Minimum variate length, in patches, to take part in cross-modal grouping.
 
     Packing strategy: First-Fit Decreasing (FFD)
+
+    Notes
+    -----
+    ``"any_variate"`` mode trims all variates of a group to one common length so
+    they pair up across modalities. When the variates have different lengths, that
+    common length is drawn at random from the valid candidates, so a batch built
+    from unequal-length signals is **not** reproducible unless you seed
+    ``random.seed()``. ``"ci"`` mode never trims.
     """
 
     def __init__(
