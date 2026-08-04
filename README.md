@@ -172,31 +172,44 @@ randomly initialized model.
 ## 🧩 Inference API
 
 `CARMEN.from_pretrained(path)` returns the bare encoder; `DownstreamModelWrapper` adds
-loading, freezing, pooling and LoRA on top.
+loading, freezing, pooling and LoRA on top. `batch` below is what `make_batch` returns.
 
-| method                                        | purpose                                            |
-|-----------------------------------------------|----------------------------------------------------|
-| `model.extract_features(batch)`               | encoder embeddings for downstream heads            |
-| `model.generate_cross_modal(batch, target)`   | synthesize one modality from the others            |
-| `model.forecast(batch)`                       | block next-patch prediction map `(B, N, K, P)`     |
-| `model.generate(batch, n_steps)`              | autoregressive waveform roll-out                   |
-| `wrapper.extract_features(batch, pool=...)`   | frozen features (+ optional gap-masking / pooling) |
-| `wrapper.inject_lora(rank=8)`                 | parameter-efficient fine-tuning of the encoder     |
-| `wrapper.get_reconstruction_loss(batch, mask)`| masked reconstruction MSE, for anomaly scoring     |
+```python
+from carmen import CARMEN, DownstreamModelWrapper
+
+model   = CARMEN.from_pretrained("checkpoints/carmen.pt")                  # bare encoder
+wrapper = DownstreamModelWrapper("checkpoints/carmen.pt", device="cuda")   # + freeze / pool / LoRA
+
+# ── Representations ──────────────────────────────────────────────────────
+feats = wrapper.extract_features(batch)                 # (B, d_model)      pooled, frozen
+feats = wrapper.extract_features(batch, pool="none")    # (B, N, d_model)   per patch
+enc   = model.extract_features(batch)                   # dict of raw encoder outputs
+
+# ── Generation ───────────────────────────────────────────────────────────
+abp   = model.generate_cross_modal(batch, target_signal_type=1)["waveform"]
+                                                        # (B, N, patch_size)
+pred  = model.forecast(batch)                           # (B, N, K, patch_size)
+roll  = model.generate(batch, n_steps=10)               # (n_steps, B, patch_size)
+
+# ── Adaptation & scoring ─────────────────────────────────────────────────
+wrapper.inject_lora(rank=8)                             # LoRA on q_proj / v_proj
+score = wrapper.get_reconstruction_loss(batch, mask)    # scalar MSE, anomaly scoring
+```
 
 <details>
 <summary><b>Two attention modes — <code>task="masked"</code> vs <code>task="next_pred"</code></b></summary>
 
 <br/>
 
-`forward(batch, task=...)` selects both the attention pattern and the heads that run:
+`forward(batch, task=...)` selects both the attention pattern and the heads that run.
 
-| `task`        | attention     | outputs added                             | used by                                |
-|---------------|---------------|-------------------------------------------|----------------------------------------|
-| `"masked"`    | bidirectional | `reconstructed`, `cross_pred_per_type`     | `extract_features`, `generate_cross_modal` |
-| `"next_pred"` | causal        | `next_pred` `(B, N, K, patch_size)`        | `forecast`, `generate`                 |
+**`task="masked"`** — bidirectional attention. Adds `reconstructed` and
+`cross_pred_per_type`; this is what `extract_features` and `generate_cross_modal` use.
 
-Both modes always return the encoder outputs — `encoded`, `patches`, `patch_mask`,
+**`task="next_pred"`** — causal attention. Adds `next_pred` `(B, N, K, patch_size)`;
+this is what `forecast` and `generate` use.
+
+Either way you also get the encoder outputs — `encoded`, `patches`, `patch_mask`,
 `loc`, `scale`, `patch_sample_id`, `patch_variate_id`, `time_id`.
 
 </details>
@@ -232,14 +245,13 @@ independent row.
 
 ## 🔬 Examples
 
-| file                                      | what it shows                                     |
-|-------------------------------------------|---------------------------------------------------|
-| [`quickstart.ipynb`](examples/quickstart.ipynb) | end-to-end notebook (build → features → generate) |
-| [`00_smoke_test.py`](examples/00_smoke_test.py) | build from config, run a forward (no weights)     |
-| [`01_extract_features.py`](examples/01_extract_features.py) | load a checkpoint, extract features |
-| [`02_downstream_probe.py`](examples/02_downstream_probe.py) | linear probe / LoRA on frozen features |
-| [`03_cross_modal_generation.py`](examples/03_cross_modal_generation.py) | ECG + PPG → ABP |
-| [`04_forecasting.py`](examples/04_forecasting.py) | forecast + autoregressive generation |
+📓 &nbsp;**[`quickstart.ipynb`](examples/quickstart.ipynb)** — end to end: build → features → generate
+
+- **[`00_smoke_test.py`](examples/00_smoke_test.py)** — build from config and run a forward, no weights needed
+- **[`01_extract_features.py`](examples/01_extract_features.py)** — load a checkpoint, extract pooled features
+- **[`02_downstream_probe.py`](examples/02_downstream_probe.py)** — linear probe and LoRA on frozen features
+- **[`03_cross_modal_generation.py`](examples/03_cross_modal_generation.py)** — ECG + PPG → ABP
+- **[`04_forecasting.py`](examples/04_forecasting.py)** — block forecast and autoregressive roll-out
 
 ```bash
 python examples/00_smoke_test.py
