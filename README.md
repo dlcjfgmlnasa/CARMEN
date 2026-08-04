@@ -45,8 +45,7 @@ away the absolute level of a pressure waveform, the `(loc, scale)` stripped out 
 scaler is fed back into **every** layer as AdaLN modulation (`LSCNorm`), keeping
 clinically meaningful magnitudes available to the encoder.
 
-The nine modalities split by the mechanism that drives the waveform — the grouping
-exposed as `carmen.MECHANISM_GROUP`:
+The nine modalities, grouped by what drives the waveform:
 
 <div align="center">
 <table>
