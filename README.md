@@ -48,6 +48,7 @@ clinically meaningful magnitudes available to the encoder.
 The nine modalities split by the mechanism that drives the waveform — the grouping
 exposed as `carmen.MECHANISM_GROUP`:
 
+<div align="center">
 <table>
   <tr>
     <th colspan="4" align="left">🫀&nbsp; Cardiovascular &nbsp;·&nbsp; <sub>locked to the cardiac cycle</sub></th>
@@ -110,6 +111,7 @@ exposed as `carmen.MECHANISM_GROUP`:
     <td>ventilator flow</td>
   </tr>
 </table>
+</div>
 
 > [!IMPORTANT]
 > CARMEN is pretrained at **100 Hz** with a patch size of **200 samples (2 s/token)**.
