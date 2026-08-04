@@ -1,39 +1,96 @@
+<div align="center">
+
 # CARMEN
 
-**CARMEN** is a cardiorespiratory foundation model for continuous physiological
-waveforms. A single Transformer encoder (~30M parameters) is pretrained across
-**9 signal modalities** and transfers to feature extraction, cross-modal waveform
-generation, and forecasting.
+### A Cardiorespiratory Foundation Model for Continuous Physiological Waveforms
+
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.10+-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
+[![PyTorch](https://img.shields.io/badge/PyTorch-2.2+-EE4C2C.svg?logo=pytorch&logoColor=white)](https://pytorch.org/)
+[![Modalities](https://img.shields.io/badge/modalities-9-teal.svg)](#-overview)
+[![Params](https://img.shields.io/badge/params-~30M-8A2BE2.svg)](#-overview)
+
+[**Model Weights**](https://github.com/dlcjfgmlnasa/CARMEN/releases) ·
+[**Quickstart Notebook**](examples/quickstart.ipynb) ·
+[**Examples**](examples) ·
+[**Inference API**](#-inference-api)
+
+</div>
+
+```mermaid
+flowchart LR
+  IN["9 modalities @ 100 Hz<br/>ECG · ABP · PPG · CVP · CO2<br/>AWP · ICP · RESP-Imp · RESP-Flow"]
+  IN --> SC["Scaler<br/>per-variate loc / scale"]
+  SC --> PT["Patchify<br/>200 samples = 2 s / token"]
+  PT --> PE["Residual-MLP projection<br/>+ modality embedding"]
+  PE --> TR["Transformer encoder<br/>GQA · GLU FFN · RoPE · LSCNorm"]
+  SC -.->|"loc / scale as AdaLN conditioning"| TR
+  TR --> O1["reconstruction head<br/>→ features · anomaly scoring"]
+  TR --> O2["cross-modal heads<br/>→ zero-shot generation"]
+  TR --> O3["block next-patch head<br/>→ forecasting · roll-out"]
+```
+
+## 📖 Overview
+
+**CARMEN** is a foundation model for the continuous waveforms recorded at the bedside
+and in the operating room. A **single Transformer encoder (~30M parameters)** is
+pretrained across **9 signal modalities** and transfers to three families of task
+without architectural surgery: **feature extraction** for downstream heads,
+**zero-shot cross-modal generation**, and **waveform forecasting**.
+
+Two design choices carry most of the weight. Every modality is tokenized the same
+way — raw patches, one shared encoder — so a single model covers all nine instead of
+one model per signal. And because per-patient normalization would otherwise throw
+away the absolute level of a pressure waveform, the `(loc, scale)` stripped out by the
+scaler is fed back into **every** layer as AdaLN modulation (`LSCNorm`), keeping
+clinically meaningful magnitudes available to the encoder.
 
 | id | modality                      | id | modality                         |
-|----|-------------------------------|----|----------------------------------|
+|:--:|-------------------------------|:--:|----------------------------------|
 | 0  | ECG (electrocardiogram)       | 5  | AWP (airway pressure)            |
 | 1  | ABP (arterial blood pressure) | 6  | ICP (intracranial pressure)      |
 | 2  | PPG (photoplethysmography)    | 7  | RESP_Impedance (chest impedance) |
 | 3  | CVP (central venous pressure) | 8  | RESP_Flow (ventilator flow)      |
 | 4  | CO2 (capnography)             |    |                                  |
 
-CARMEN is pretrained at **100 Hz** with a patch size of **200 samples (2 s/token)** —
-resample your signals to 100 Hz before use.
+> [!IMPORTANT]
+> CARMEN is pretrained at **100 Hz** with a patch size of **200 samples (2 s/token)**.
+> Resample your signals to 100 Hz before use.
 
-This repository is **inference-only**: the pretraining loop is not included.
+> [!NOTE]
+> This repository is **inference-only** — the pretraining loop is not included.
 
-## Install
+## 🚀 Quick Start
+
+### 📦 Installation
 
 ```bash
-pip install -e .            # or: pip install -r requirements.txt
+git clone https://github.com/dlcjfgmlnasa/CARMEN.git && cd CARMEN
+pip install -e .              # or: pip install -r requirements.txt
 ```
 
-Then download a checkpoint into `checkpoints/` (see
-[`checkpoints/README.md`](checkpoints/README.md)). Weights are **not** committed to git.
+Requires Python ≥ 3.10, PyTorch ≥ 2.2, einops ≥ 0.7.
 
-## Quickstart
+### 🧠 Model weights
+
+Weights are distributed as a **GitHub Release asset** and are *not* committed to git.
+Download a checkpoint into `checkpoints/` — see [`checkpoints/README.md`](checkpoints/README.md):
+
+```bash
+curl -L -o checkpoints/carmen.pt \
+  https://github.com/dlcjfgmlnasa/CARMEN/releases/download/v1.0/carmen.pt
+```
+
+Each checkpoint embeds its own `ModelConfig`, so the architecture is reconstructed
+automatically — you never specify it by hand.
+
+### ✨ Extracting features
 
 ```python
 import torch
 from carmen import DownstreamModelWrapper, make_batch
 
-# 1. Load the pretrained encoder (the checkpoint embeds its own config)
+# 1. Load the pretrained encoder (frozen, eval mode)
 wrapper = DownstreamModelWrapper("checkpoints/carmen.pt", device="cpu")
 
 # 2. Pack raw 1-D signals (100 Hz) into a batch — one patient, multiple modalities
@@ -45,79 +102,141 @@ batch = make_batch(
     patch_size=wrapper.patch_size,
 )
 
-# 3. Extract a feature vector per patient
+# 3. One feature vector per patient
 features = wrapper.extract_features(batch)   # (B, d_model)
 ```
 
-No checkpoint yet? Run `python examples/00_smoke_test.py` to verify the install with a
+No checkpoint yet? `python examples/00_smoke_test.py` verifies the install against a
 randomly initialized model.
 
-## Inference API
+## 🧩 Inference API
 
-`CARMEN.from_pretrained(path)` gives you the bare encoder; `DownstreamModelWrapper`
-adds loading + freezing + pooling + LoRA on top. Key methods:
+`CARMEN.from_pretrained(path)` returns the bare encoder; `DownstreamModelWrapper` adds
+loading, freezing, pooling and LoRA on top.
 
-| method                                        | purpose                                             |
-|-----------------------------------------------|-----------------------------------------------------|
-| `model.extract_features(batch)`               | encoder embeddings for downstream heads             |
-| `model.generate_cross_modal(batch, target)`   | synthesize one modality from others (zero-shot)     |
-| `model.forecast(batch)`                       | block next-patch prediction map `(B, N, K, P)`      |
-| `model.generate(batch, n_steps)`              | autoregressive waveform roll-out                    |
-| `wrapper.extract_features(batch, pool=...)`   | frozen features (+ optional gap-masking / pooling)  |
-| `wrapper.inject_lora(rank=8)`                 | parameter-efficient fine-tuning of the encoder      |
+| method                                        | purpose                                            |
+|-----------------------------------------------|----------------------------------------------------|
+| `model.extract_features(batch)`               | encoder embeddings for downstream heads            |
+| `model.generate_cross_modal(batch, target)`   | synthesize one modality from others (zero-shot)    |
+| `model.forecast(batch)`                       | block next-patch prediction map `(B, N, K, P)`     |
+| `model.generate(batch, n_steps)`              | autoregressive waveform roll-out                   |
+| `wrapper.extract_features(batch, pool=...)`   | frozen features (+ optional gap-masking / pooling) |
+| `wrapper.inject_lora(rank=8)`                 | parameter-efficient fine-tuning of the encoder     |
+| `wrapper.get_reconstruction_loss(batch, mask)`| masked reconstruction MSE, for anomaly scoring     |
 
-`forward(batch, task=...)` takes `task="masked"` (bidirectional attention →
-`reconstructed`, `cross_pred_per_type`) or `task="next_pred"` (causal attention →
-`next_pred`).
+<details>
+<summary><b>Two attention modes — <code>task="masked"</code> vs <code>task="next_pred"</code></b></summary>
 
-## Examples
+<br/>
 
-| file                                      | what it shows                                    |
-|-------------------------------------------|--------------------------------------------------|
-| `examples/quickstart.ipynb`               | end-to-end notebook (build → features → generate)|
-| `examples/00_smoke_test.py`               | build from config, run a forward (no weights)    |
-| `examples/01_extract_features.py`         | load a checkpoint, extract features              |
-| `examples/02_downstream_probe.py`         | linear probe / LoRA on frozen features           |
-| `examples/03_cross_modal_generation.py`   | ECG + PPG → ABP                                   |
-| `examples/04_forecasting.py`              | forecast + autoregressive generation             |
+`forward(batch, task=...)` selects both the attention pattern and the heads that run:
+
+| `task`        | attention     | outputs added                             | used by                                |
+|---------------|---------------|-------------------------------------------|----------------------------------------|
+| `"masked"`    | bidirectional | `reconstructed`, `cross_pred_per_type`     | `extract_features`, `generate_cross_modal` |
+| `"next_pred"` | causal        | `next_pred` `(B, N, K, patch_size)`        | `forecast`, `generate`                 |
+
+Both modes always return the encoder outputs — `encoded`, `patches`, `patch_mask`,
+`loc`, `scale`, `patch_sample_id`, `patch_variate_id`, `time_id`.
+
+</details>
+
+<details>
+<summary><b>Feeding your own data</b></summary>
+
+<br/>
+
+`make_batch` covers the common case. For full control, build one `BiosignalSample` per
+channel and collate them with `PackCollate`:
+
+```python
+from carmen import BiosignalSample, PackCollate, CHANNEL_NAME_TO_SIGNAL_TYPE
+
+sample = BiosignalSample(
+    values=ecg,                 # 1-D tensor @ 100 Hz
+    length=ecg.numel(),
+    channel_idx=0, recording_idx=0, n_channels=1, win_start=0,
+    sampling_rate=100.0,
+    signal_type=CHANNEL_NAME_TO_SIGNAL_TYPE["ECG II"],   # -> 0
+    session_id="patient-001",   # samples sharing a session are paired cross-modally
+    start_sample=0,
+)
+batch = PackCollate(max_length=8192, patch_size=200)([sample])
+```
+
+`collate_mode="any_variate"` (default) groups a patient's modalities into one row so
+the encoder can attend across them; `collate_mode="ci"` treats each signal as an
+independent row.
+
+</details>
+
+## 🔬 Examples
+
+| file                                      | what it shows                                     |
+|-------------------------------------------|---------------------------------------------------|
+| [`quickstart.ipynb`](examples/quickstart.ipynb) | end-to-end notebook (build → features → generate) |
+| [`00_smoke_test.py`](examples/00_smoke_test.py) | build from config, run a forward (no weights)     |
+| [`01_extract_features.py`](examples/01_extract_features.py) | load a checkpoint, extract features |
+| [`02_downstream_probe.py`](examples/02_downstream_probe.py) | linear probe / LoRA on frozen features |
+| [`03_cross_modal_generation.py`](examples/03_cross_modal_generation.py) | ECG + PPG → ABP |
+| [`04_forecasting.py`](examples/04_forecasting.py) | forecast + autoregressive generation |
 
 ```bash
 python examples/00_smoke_test.py
 python examples/01_extract_features.py checkpoints/carmen.pt
 ```
 
-## Repository layout
+## 🗂️ Repository Layout
 
 ```
 carmen/
-  model.py         CARMEN encoder + inference API
-  config.py        ModelConfig (embedded in every checkpoint)
-  checkpoint.py    checkpoint save / load
-  wrapper.py       DownstreamModelWrapper (load / freeze / LoRA), LinearProbe
-  batch.py         make_batch / to_device — raw signals -> PackedBatch
-  loss.py          MaskedPatchLoss (reconstruction scoring)
-  data/            PackCollate (bin-packing), BiosignalSample, signal-type maps
-  modules/         building blocks — attention (GQA), GLU FFN, RMSNorm/LSCNorm,
-                   patch embedding, packed scalers, RoPE / attention bias
-examples/          runnable examples + quickstart notebook
-checkpoints/       put downloaded weights here (gitignored)
+├── model.py         CARMEN encoder + inference API
+├── config.py        ModelConfig (embedded in every checkpoint)
+├── checkpoint.py    checkpoint save / load
+├── wrapper.py       DownstreamModelWrapper (load / freeze / LoRA), LinearProbe
+├── batch.py         make_batch / to_device — raw signals -> PackedBatch
+├── loss.py          MaskedPatchLoss (reconstruction scoring)
+├── data/            PackCollate (bin-packing), BiosignalSample, signal-type maps
+└── modules/         attention (GQA), GLU FFN, RMSNorm / LSCNorm, patch embedding,
+                     packed scalers, RoPE / attention bias
+examples/            runnable examples + quickstart notebook
+checkpoints/         put downloaded weights here (gitignored)
 ```
 
-## Notes
+## ⚠️ Caveats
 
-- The checkpoint stores `model_state_dict`, `config`, and `epoch`. The embedded
-  `config` reconstructs the architecture automatically — you never specify it by hand.
-- Feeding data: `make_batch` covers the common case. For full control, build a
-  `BiosignalSample` per channel and collate with `PackCollate`. Channel names map to
-  signal types via `carmen.CHANNEL_NAME_TO_SIGNAL_TYPE`.
-- In `collate_mode="any_variate"`, `PackCollate` trims a patient's variates to one
-  common length so they pair up across modalities; with unequal-length inputs that
-  length is chosen randomly, so seed `random.seed()` if you need reproducible batches.
-- Reliable cross-modal source/target pairs are listed in
-  `carmen.CROSS_PRED_ALLOWED_PAIRS`.
+- **Cross-modal reliability.** Not every source → target pair is physiologically
+  supported. The pairs the model was trained to transfer across are listed in
+  `carmen.CROSS_PRED_ALLOWED_PAIRS` (ECG↔ABP, ECG↔PPG, ABP↔PPG, AWP↔RESP_Flow).
+- **Denormalized output is approximate.** `generate_cross_modal(..., denormalize=True)`
+  rescales with the *source* signal's `loc`/`scale`, because the target's own level is
+  unknown. Treat the absolute magnitude accordingly.
+- **`any_variate` batching is non-deterministic.** `PackCollate` trims a patient's
+  variates to one common length so they pair up; with unequal-length inputs that length
+  is drawn at random. Seed `random.seed()` if you need reproducible batches, or use
+  `collate_mode="ci"`.
 
-## License
+## 🙏 Acknowledgements
 
-Released under the [Apache License 2.0](LICENSE). Portions of the model building
-blocks are adapted from [uni2ts](https://github.com/SalesforceAIResearch/uni2ts)
-(Apache 2.0); see [`NOTICE`](NOTICE).
+The model building blocks — grouped-query attention, GLU feed-forward, packed scalers,
+rotary/binary attention bias — are adapted from
+[uni2ts](https://github.com/SalesforceAIResearch/uni2ts) (Salesforce, Apache 2.0).
+See [`NOTICE`](NOTICE) for the derived-file list.
+
+## 📜 Citation
+
+A paper describing CARMEN is in preparation. Until it is out, please cite this
+repository:
+
+```bibtex
+@software{carmen2026,
+  title  = {CARMEN: A Cardiorespiratory Foundation Model for Continuous Physiological Waveforms},
+  author = {The CARMEN Authors},
+  year   = {2026},
+  url    = {https://github.com/dlcjfgmlnasa/CARMEN}
+}
+```
+
+## ⚖️ License
+
+Released under the [Apache License 2.0](LICENSE).
