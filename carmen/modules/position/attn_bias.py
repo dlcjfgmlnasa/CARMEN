@@ -55,8 +55,10 @@ class AttentionBias(nn.Module, abc.ABC):
 class BinaryAttentionBias(AttentionBias):
     """Binary attention bias (bias depending on whether IDs match).
 
-    Applies a different learnable bias to tokens of the same variate (sample_id)
-    versus tokens of a different variate.
+    Applies a different learnable bias, per attention head, to query/key pairs whose
+    ids match versus pairs whose ids differ. CARMEN feeds it ``variate_id``, so the
+    two learned values distinguish attending within one signal from attending across
+    signals.
 
     Parameters
     ----------
