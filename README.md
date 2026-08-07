@@ -132,6 +132,12 @@ Requires Python ≥ 3.10, PyTorch ≥ 2.2, einops ≥ 0.7.
 
 ### 🧠 Model weights
 
+> **Pretrained weights will be published here upon acceptance of the paper.**
+> Until then this repository ships the model implementation and inference API only —
+> the release asset referenced below is not yet available. You can still build the
+> model from a config and run a forward pass without weights
+> (see [`examples/00_smoke_test.py`](examples/00_smoke_test.py)).
+
 Weights are distributed as a **GitHub Release asset** and are *not* committed to git.
 Download a checkpoint into `checkpoints/` — see [`checkpoints/README.md`](checkpoints/README.md):
 
@@ -293,6 +299,10 @@ The model building blocks — grouped-query attention, GLU feed-forward, packed 
 rotary/binary attention bias — are adapted from
 [uni2ts](https://github.com/SalesforceAIResearch/uni2ts) (Salesforce, Apache 2.0).
 See [`NOTICE`](NOTICE) for the derived-file list.
+
+This research was supported by a grant of the Korea Health Technology R&D Project through
+the Korea Health Industry Development Institute (KHIDI), funded by the Ministry of Health &
+Welfare, Republic of Korea (grant number : RS-2024-00439677 , NTIS number:2460003917)
 
 ## 📜 Citation
 
