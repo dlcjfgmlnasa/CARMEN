@@ -295,11 +295,6 @@ checkpoints/         put downloaded weights here (gitignored)
 
 ## 🙏 Acknowledgements
 
-The model building blocks — grouped-query attention, GLU feed-forward, packed scalers,
-rotary/binary attention bias — are adapted from
-[uni2ts](https://github.com/SalesforceAIResearch/uni2ts) (Salesforce, Apache 2.0).
-See [`NOTICE`](NOTICE) for the derived-file list.
-
 This research was supported by a grant of the Korea Health Technology R&D Project through
 the Korea Health Industry Development Institute (KHIDI), funded by the Ministry of Health &
 Welfare, Republic of Korea (grant number : RS-2024-00439677 , NTIS number:2460003917)
