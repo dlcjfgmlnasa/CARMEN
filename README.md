@@ -21,19 +21,6 @@
 
 - **2026.10** — CARMEN has been accepted to the **AI4Health Workshop at NeurIPS 2026**. 🎉
 
-```mermaid
-flowchart LR
-  IN["10 modalities @ 100 Hz<br/>ECG · ABP · PPG · CVP · CO2<br/>AWP · ICP · RESP-Imp · RESP-Flow · PAP"]
-  IN --> SC["Scaler<br/>per-variate loc / scale"]
-  SC --> PT["Patchify<br/>25 samples = 0.25 s / token"]
-  PT --> PE["Residual-MLP projection<br/>+ modality embedding"]
-  PE --> TR["Transformer encoder<br/>GQA · GLU FFN · RoPE · LSCNorm"]
-  SC -.->|"window loc / scale + patch mean / std<br/>as AdaLN conditioning"| TR
-  TR --> O1["reconstruction head<br/>→ features · anomaly scoring"]
-  TR --> O2["cross-modal heads<br/>→ cross-modal reconstruction"]
-  TR --> O3["block next-patch head<br/>→ forecasting · roll-out"]
-```
-
 ## 📖 Overview
 
 **CARMEN** is a foundation model for the continuous waveforms recorded at the bedside
