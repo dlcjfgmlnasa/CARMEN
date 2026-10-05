@@ -46,9 +46,9 @@ Two design choices do most of the work:
 
 ## 📐 Input Requirements
 
-CARMEN conditions on the **absolute level** of each signal, so inputs must be in the
-units used during pretraining. A signal in the wrong unit will run without error but
-produce degraded features.
+CARMEN conditions on the **absolute level** of each signal (PPG excepted), so inputs
+must be in the units used during pretraining. A signal in the wrong unit will run
+without error but produce degraded features.
 
 | `signal_type` | Modality | `make_batch` key | Expected unit |
 | :-: | --- | --- | --- |
@@ -63,7 +63,8 @@ produce degraded features.
 | 8 | RESP_Flow | `"resp_flow"` | L/min |
 | 9 | PAP | `"pap"` | mmHg |
 
-The authoritative mapping is `carmen.SIGNAL_TYPE_NAMES`.
+The authoritative mappings are `carmen.SIGNAL_TYPE_NAMES` (type → name) and
+`carmen.SIGNAL_KEY_TO_TYPE` (`make_batch` key → type).
 
 > [!IMPORTANT]
 > CARMEN is pretrained at **100 Hz** with a patch size of **25 samples (0.25 s/token)**.
