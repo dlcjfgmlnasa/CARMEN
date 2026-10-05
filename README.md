@@ -6,7 +6,7 @@
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.2+-EE4C2C.svg?logo=pytorch&logoColor=white)](https://pytorch.org/)
 [![Modalities](https://img.shields.io/badge/modalities-10-teal.svg)](#-overview)
-[![Params](https://img.shields.io/badge/params-~174M-8A2BE2.svg)](#-overview)
+[![Sizes](https://img.shields.io/badge/sizes-52M%20%7C%20174M%20%7C%20410M-8A2BE2.svg)](#-model-weights)
 
 [**Quickstart Notebook**](examples/quickstart.ipynb) · [**Examples**](examples) · [**Inference API**](#-inference-api) · [**Model Weights**](#-model-weights) (coming soon)
 
@@ -17,10 +17,11 @@
 ## 📖 Overview
 
 **CARMEN** is a foundation model for the continuous waveforms recorded at the bedside
-and in the operating room. A **single Transformer encoder (~174M parameters)** is
-pretrained on **10 signal modalities** and used as a frozen **feature extractor** for
-downstream clinical tasks (detection, prediction, outcome, estimation and
-phenotyping), with only a lightweight head trained on top.
+and in the operating room. A **single Transformer encoder**, released in three sizes
+(**Small 52M · Base 174M · Large 410M**), is pretrained on **10 signal modalities** and
+used as a frozen **feature extractor** for downstream clinical tasks (detection,
+prediction, outcome, estimation and phenotyping), with only a lightweight head trained
+on top.
 
 Two design choices do most of the work:
 
@@ -91,18 +92,28 @@ the only example that works before the pretrained weights are released.
 ### 🧠 Model weights
 
 > [!NOTE]
-> **Pretrained weights are not yet available.** They will be published as a GitHub
-> Release asset upon publication of the full paper. Until then this repository ships
+> **Pretrained weights are not yet available.** They will be published as GitHub
+> Release assets upon publication of the full paper. Until then this repository ships
 > the model implementation and inference API only, and every example below that loads
-> `checkpoints/carmen.pt` requires the release.
+> a checkpoint requires the release.
 
-Once released, download the checkpoint into `checkpoints/` (see
-[`checkpoints/README.md`](checkpoints/README.md)); weights are *not* committed to git:
+CARMEN comes in three sizes. They share the input pipeline (10 modalities, 100 Hz,
+0.25 s patches, same conditioning) and pretraining recipe; only width and depth differ.
+
+| Model | Params | `d_model` | Layers | Heads | File | Size (fp32) |
+| --- | --: | --: | --: | --: | --- | --: |
+| CARMEN-Small | 52M | 512 | 16 | 8 | `carmen-small.pt` | ~210 MB |
+| **CARMEN-Base** | **174M** | 768 | 24 | 12 | `carmen-base.pt` | ~700 MB |
+| CARMEN-Large | 410M | 1024 | 32 | 16 | `carmen-large.pt` | ~1.6 GB |
+
+The examples default to **Base**. Once released, download a checkpoint into
+`checkpoints/` (see [`checkpoints/README.md`](checkpoints/README.md)); weights are *not*
+committed to git:
 
 ```bash
-# available after release
-curl -L -o checkpoints/carmen.pt \
-  https://github.com/dlcjfgmlnasa/CARMEN/releases/download/v2.0.0/carmen.pt
+# available after release — swap "base" for "small" or "large"
+curl -L -o checkpoints/carmen-base.pt \
+  https://github.com/dlcjfgmlnasa/CARMEN/releases/download/v2.0.0/carmen-base.pt
 ```
 
 Each checkpoint embeds its own `ModelConfig`, so the architecture is reconstructed
@@ -115,7 +126,7 @@ import torch
 from carmen import DownstreamModelWrapper, make_batch
 
 # 1. Load the pretrained encoder (frozen, eval mode)
-wrapper = DownstreamModelWrapper("checkpoints/carmen.pt", device="cpu")
+wrapper = DownstreamModelWrapper("checkpoints/carmen-base.pt", device="cpu")
 
 # 2. Pack raw 1-D signals (100 Hz) into a batch — one patient, multiple modalities
 t = torch.linspace(0, 30, 3000)
@@ -147,8 +158,8 @@ loading, freezing, pooling and LoRA on top. `batch` below is what `make_batch` r
 ```python
 from carmen import CARMEN, DownstreamModelWrapper
 
-model   = CARMEN.from_pretrained("checkpoints/carmen.pt")                  # bare encoder
-wrapper = DownstreamModelWrapper("checkpoints/carmen.pt", device="cuda")   # + freeze / pool / LoRA
+model   = CARMEN.from_pretrained("checkpoints/carmen-base.pt")                  # bare encoder
+wrapper = DownstreamModelWrapper("checkpoints/carmen-base.pt", device="cuda")   # + freeze / pool / LoRA
 
 # ── Representations ──────────────────────────────────────────────────────
 feats = wrapper.extract_features(batch)                 # (B, d_model)      pooled, frozen
@@ -159,7 +170,7 @@ enc   = model.extract_features(batch)                   # dict of raw encoder ou
 wrapper.inject_lora(rank=8)                             # LoRA on q_proj / v_proj
 
 # ── Finer tokens from the same weights ───────────────────────────────────
-fine = DownstreamModelWrapper("checkpoints/carmen.pt", patch_stride=5)
+fine = DownstreamModelWrapper("checkpoints/carmen-base.pt", patch_stride=5)
                                                         # overlapping patches; RoPE positions
                                                         # are rescaled to physical spacing
 ```
@@ -198,7 +209,7 @@ independent row.
 
 ```bash
 python examples/00_smoke_test.py
-python examples/01_extract_features.py checkpoints/carmen.pt
+python examples/01_extract_features.py checkpoints/carmen-base.pt
 ```
 
 ## 🗂️ Repository Layout

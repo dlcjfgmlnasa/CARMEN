@@ -17,7 +17,7 @@ from carmen import DownstreamModelWrapper, make_batch
 
 
 def main() -> None:
-    ckpt = sys.argv[1] if len(sys.argv) > 1 else "checkpoints/carmen.pt"
+    ckpt = sys.argv[1] if len(sys.argv) > 1 else "checkpoints/carmen-base.pt"
     if not os.path.exists(ckpt):
         print(f"Checkpoint not found: {ckpt}")
         print("Download it (see checkpoints/README.md) or pass a path as argument.")

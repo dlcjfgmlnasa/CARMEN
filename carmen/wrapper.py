@@ -6,7 +6,7 @@ adapters for parameter-efficient fine-tuning.
 
 Usage
 -----
->>> wrapper = DownstreamModelWrapper("checkpoints/carmen.pt")
+>>> wrapper = DownstreamModelWrapper("checkpoints/carmen-base.pt")
 >>> features = wrapper.extract_features(batch)  # (B, d_model)
 >>> probe = LinearProbe(wrapper.d_model, n_classes=3)
 >>>

@@ -4,7 +4,7 @@
 Quickstart
 ----------
 >>> from carmen import DownstreamModelWrapper, make_batch
->>> wrapper = DownstreamModelWrapper("checkpoints/carmen.pt", device="cpu")
+>>> wrapper = DownstreamModelWrapper("checkpoints/carmen-base.pt", device="cpu")
 >>> batch = make_batch([("ecg", ecg), ("ppg", ppg)], patch_size=wrapper.patch_size)
 >>> features = wrapper.extract_features(batch)   # (B, d_model)
 
