@@ -18,18 +18,27 @@ Get the weights from the Releases page:
 <https://github.com/dlcjfgmlnasa/CARMEN/releases>
 
 ```bash
-# once a release is published (example tag v1.0):
+# once a release is published (example tag v2.0.0):
 curl -L -o checkpoints/carmen.pt \
-  https://github.com/dlcjfgmlnasa/CARMEN/releases/download/v1.0/carmen.pt
+  https://github.com/dlcjfgmlnasa/CARMEN/releases/download/v2.0.0/carmen.pt
 ```
 
 ## Publishing weights (maintainers)
 
-Upload the checkpoint as a Release asset — fp32 (~120 MB) is fine:
+A training checkpoint also carries the optimizer state, which roughly triples the file
+(~2 GB, at the Release asset limit). Keep only what inference needs before uploading:
+
+```python
+import torch
+s = torch.load("ckpt_from_training.pt", map_location="cpu", weights_only=False)
+torch.save({k: s[k] for k in ("model_state_dict", "config", "epoch")}, "checkpoints/carmen.pt")
+```
+
+Then upload it as a Release asset (fp32, ~700 MB):
 
 ```bash
-gh release create v1.0 checkpoints/carmen.pt \
-  --title "CARMEN v1.0" --notes "Pretrained CARMEN weights"
+gh release create v2.0.0 checkpoints/carmen.pt \
+  --title "CARMEN v2.0.0" --notes "Pretrained CARMEN weights"
 # or: create a new release in the GitHub UI and drag-and-drop the .pt file
 ```
 

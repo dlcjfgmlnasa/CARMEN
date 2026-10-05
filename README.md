@@ -36,7 +36,7 @@ away the absolute level of a pressure waveform, the `(loc, scale)` stripped out 
 scaler — together with each patch's own mean and standard deviation — is fed back into
 **every** layer as AdaLN modulation (`LSCNorm`), keeping clinically meaningful
 magnitudes available to the encoder. PPG amplitude is set by the device's gain rather
-than by physiology, so its absolute `(loc, scale)` is gated out of the conditioning.
+than by physiology, so PPG tokens are excluded from this conditioning.
 
 The modalities are ECG, ABP, PPG, CVP, CO2, AWP, ICP, RESP_Impedance, RESP_Flow and
 PAP (`signal_type` 0–9; see `carmen.SIGNAL_TYPE_NAMES`).
@@ -72,7 +72,7 @@ Download a checkpoint into `checkpoints/` — see [`checkpoints/README.md`](chec
 
 ```bash
 curl -L -o checkpoints/carmen.pt \
-  https://github.com/dlcjfgmlnasa/CARMEN/releases/download/v1.0/carmen.pt
+  https://github.com/dlcjfgmlnasa/CARMEN/releases/download/v2.0.0/carmen.pt
 ```
 
 Each checkpoint embeds its own `ModelConfig`, so the architecture is reconstructed
