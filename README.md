@@ -69,6 +69,12 @@ The authoritative mapping is `carmen.SIGNAL_TYPE_NAMES`.
 > CARMEN is pretrained at **100 Hz** with a patch size of **25 samples (0.25 s/token)**.
 > Resample your signals to 100 Hz before use.
 
+> [!IMPORTANT]
+> **Inputs must be finite.** A single `NaN` turns every feature of that sample into
+> `NaN`, without an error. Fill gaps before packing (for example with 0), and optionally
+> pass the gap positions as `extract_features(batch, gap_mask_patch=...)` — a
+> `(B, N)` bool mask — so those patches are replaced by the learned [MASK] token.
+
 ## 🚀 Quick Start
 
 ### 📦 Installation
@@ -86,8 +92,9 @@ Requires Python ≥ 3.10, PyTorch ≥ 2.2, einops ≥ 0.7.
 python examples/00_smoke_test.py
 ```
 
-This builds the model from a config with random weights and runs a forward pass. It is
-the only example that works before the pretrained weights are released.
+This builds the model from a config with random weights and runs a forward pass. Until
+the pretrained weights are released, it is the only example script that runs end to
+end (the first sections of the quickstart notebook also run without weights).
 
 ### 🧠 Model weights
 
@@ -168,6 +175,9 @@ enc   = model.extract_features(batch)                   # dict of raw encoder ou
 
 # ── Adaptation ───────────────────────────────────────────────────────────
 wrapper.inject_lora(rank=8)                             # LoRA on q_proj / v_proj
+# extract_features runs without gradients; to train the adapters, call
+# wrapper.model(batch, task="masked") and pool "encoded" yourself
+# (see examples/02_downstream_probe.py)
 
 # ── Finer tokens from the same weights ───────────────────────────────────
 fine = DownstreamModelWrapper("checkpoints/carmen-base.pt", patch_stride=5)
