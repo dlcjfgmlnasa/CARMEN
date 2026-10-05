@@ -36,8 +36,8 @@ def make_batch(
     signals:
         List of ``(modality, values)``. ``modality`` is a signal key
         (``"ecg"``, ``"abp"``, ``"ppg"``, ``"cvp"``, ``"co2"``, ``"awp"``,
-        ``"icp"``, ``"resp_impedance"``, ``"resp_flow"``) or the integer
-        signal_type (0-8). ``values`` is a 1-D tensor sampled at
+        ``"icp"``, ``"resp_impedance"``, ``"resp_flow"``, ``"pap"``) or the integer
+        signal_type (0-9). ``values`` is a 1-D tensor sampled at
         ``sampling_rate`` Hz. CARMEN was pretrained at 100 Hz — resample first.
     patch_size:
         Model patch size. Use ``wrapper.patch_size`` for a loaded checkpoint.

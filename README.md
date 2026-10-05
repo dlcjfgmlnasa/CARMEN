@@ -23,23 +23,14 @@
 
 ## 📖 Overview
 
-**CARMEN** is a foundation model for the continuous waveforms recorded at the bedside
-and in the operating room. A **single Transformer encoder (~174M parameters)** is
-pretrained across **10 signal modalities** and serves as a frozen **feature
-extractor** for downstream clinical tasks — detection, prediction, outcome,
-estimation and phenotyping — with a light head on top.
+CARMEN is a foundation model for the continuous waveforms recorded at the bedside and in the operating room. A single Transformer encoder (~174M parameters) is pretrained on 10 signal modalities and used as a frozen feature extractor for downstream clinical tasks (detection, prediction, outcome, estimation and phenotyping), with only a lightweight head trained on top.
 
-Two design choices carry most of the weight. Every modality is tokenized the same
-way — raw patches, one shared encoder — so a single model covers all ten instead of
-one model per signal. And because per-window normalization would otherwise throw
-away the absolute level of a pressure waveform, the `(loc, scale)` stripped out by the
-scaler — together with each patch's own mean and standard deviation — is fed back into
-**every** layer as AdaLN modulation (`LSCNorm`), keeping clinically meaningful
-magnitudes available to the encoder. PPG amplitude is set by the device's gain rather
-than by physiology, so PPG tokens are excluded from this conditioning.
+Two design choices do most of the work:
 
-The modalities are ECG, ABP, PPG, CVP, CO2, AWP, ICP, RESP_Impedance, RESP_Flow and
-PAP (`signal_type` 0–9; see `carmen.SIGNAL_TYPE_NAMES`).
+- **One tokenizer, one encoder.** Every modality is tokenized the same way, as raw patches fed to a shared encoder, so a single model covers all ten signals instead of one model per signal.
+- **Absolute level is preserved (`LSCNorm`).** Per-window normalization would otherwise discard the absolute level of a pressure waveform. The `(loc, scale)` removed by the scaler, together with each patch's own mean and standard deviation, is fed back into every layer as AdaLN modulation, so clinically meaningful magnitudes stay available to the encoder. PPG is the exception: its amplitude is set by device gain rather than physiology, so PPG is excluded from this conditioning altogether.
+
+**Modalities** (`signal_type` 0–9, see `carmen.SIGNAL_TYPE_NAMES`): ECG, ABP, PPG, CVP, CO2, AWP, ICP, RESP_Impedance, RESP_Flow, PAP.
 
 > [!IMPORTANT]
 > CARMEN is pretrained at **100 Hz** with a patch size of **25 samples (0.25 s/token)**.
