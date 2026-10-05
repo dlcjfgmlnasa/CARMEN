@@ -109,11 +109,19 @@ class RotaryProjection(Projection):
     def forward(
         self,
         x: torch.Tensor,  # (*batch, group, hpg, seq, dim)
-        seq_id: torch.Tensor | None,  # (*batch, #group, #hpg, seq) long
+        seq_id: torch.Tensor | None,  # (*batch, #group, #hpg, seq) long or float
     ) -> torch.Tensor:  # (*batch, group, hpg, seq, dim)
-        self._init_freq(max_len=seq_id.max() + 1)
-        rot_cos = self.cos[seq_id]
-        rot_sin = self.sin[seq_id]
+        if torch.is_floating_point(seq_id):
+            # Fractional positions (overlapping-stride position interpolation):
+            # compute the angles directly instead of indexing the integer cache.
+            m_theta = seq_id.unsqueeze(-1).to(self.theta.dtype) * self.theta
+            m_theta = repeat(m_theta, "... width -> ... (width 2)")
+            rot_cos = torch.cos(m_theta)
+            rot_sin = torch.sin(m_theta)
+        else:
+            self._init_freq(max_len=seq_id.max() + 1)
+            rot_cos = self.cos[seq_id]
+            rot_sin = self.sin[seq_id]
         return rot_cos * x + rot_sin * self._rotate(x)
 
 

@@ -1,9 +1,9 @@
 """Signal-type mapping tables (single modality-embedding scheme).
 
-CARMEN uses one embedding per modality (signal_type). There are 9 signal types:
+CARMEN uses one embedding per modality (signal_type). There are 10 signal types:
 
   ECG(0), ABP(1), PPG(2), CVP(3), CO2(4), AWP(5),
-  ICP(6), RESP_Impedance(7), RESP_Flow(8)
+  ICP(6), RESP_Impedance(7), RESP_Flow(8), PAP(9)
 
 RESP is split into chest-impedance respiration (RESP_Impedance) and the ventilator
 flow waveform (RESP_Flow). All ECG leads map to a single ECG type, and all ABP
@@ -24,6 +24,7 @@ SIGNAL_TYPE_NAMES: dict[int, str] = {
     6: "ICP",
     7: "RESP_Impedance",
     8: "RESP_Flow",
+    9: "PAP",
 }
 
 
@@ -38,6 +39,7 @@ SIGNAL_KEY_TO_TYPE: dict[str, int] = {
     "icp": 6,
     "resp_impedance": 7,
     "resp_flow": 8,
+    "pap": 9,
 }
 
 # signal_type number -> lowercase key (reverse map)
@@ -45,7 +47,7 @@ SIGNAL_TYPE_TO_KEY: dict[int, str] = {v: k for k, v in SIGNAL_KEY_TO_TYPE.items(
 
 
 # ── Mechanism Group ────────────────────────────────────────────
-# Cardiovascular (0): ECG, ABP, PPG, CVP, ICP — cardiac-cycle synchronized
+# Cardiovascular (0): ECG, ABP, PPG, CVP, ICP, PAP — cardiac-cycle synchronized
 # Respiratory (1): CO2, AWP, RESP_Impedance, RESP_Flow — ventilation synchronized
 MECHANISM_GROUP: dict[int, int] = {
     0: 0,  # ECG            -> Cardiovascular
@@ -57,6 +59,7 @@ MECHANISM_GROUP: dict[int, int] = {
     6: 0,  # ICP            -> Cardiovascular
     7: 1,  # RESP_Impedance -> Respiratory
     8: 1,  # RESP_Flow      -> Respiratory
+    9: 0,  # PAP            -> Cardiovascular
 }
 
 MECHANISM_GROUP_NAMES: dict[int, str] = {
@@ -115,4 +118,6 @@ CHANNEL_NAME_TO_SIGNAL_TYPE: dict[str, int] = {
     "RESP": 7, "Impedance": 7,
     # RESP_Flow (8)
     "FLOW": 8, "FLOW_WAV": 8,
+    # PAP (9)
+    "PAP": 9,
 }

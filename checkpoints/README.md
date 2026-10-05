@@ -1,7 +1,7 @@
 # Checkpoints
 
-CARMEN is a **~30M-parameter** model, so a checkpoint is roughly **120 MB (fp32)** or
-**60 MB (fp16)**. Weights are distributed as a **GitHub Release asset** — not committed
+CARMEN is a **~174M-parameter** model, so a checkpoint is roughly **700 MB (fp32)** or
+**350 MB (fp16)**. Weights are distributed as a **GitHub Release asset** — not committed
 to git, so clones stay small. (Release assets allow files up to 2 GB, so even the fp32
 checkpoint fits with room to spare.)
 

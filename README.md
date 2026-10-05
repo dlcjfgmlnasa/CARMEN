@@ -7,8 +7,8 @@
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.2+-EE4C2C.svg?logo=pytorch&logoColor=white)](https://pytorch.org/)
-[![Modalities](https://img.shields.io/badge/modalities-9-teal.svg)](#-overview)
-[![Params](https://img.shields.io/badge/params-~30M-8A2BE2.svg)](#-overview)
+[![Modalities](https://img.shields.io/badge/modalities-10-teal.svg)](#-overview)
+[![Params](https://img.shields.io/badge/params-~174M-8A2BE2.svg)](#-overview)
 
 [**Model Weights**](https://github.com/dlcjfgmlnasa/CARMEN/releases) ·
 [**Quickstart Notebook**](examples/quickstart.ipynb) ·
@@ -17,14 +17,18 @@
 
 </div>
 
+## 📰 News
+
+- **2026.10** — CARMEN has been accepted to the **AI4Health Workshop at NeurIPS 2026**. 🎉
+
 ```mermaid
 flowchart LR
-  IN["9 modalities @ 100 Hz<br/>ECG · ABP · PPG · CVP · CO2<br/>AWP · ICP · RESP-Imp · RESP-Flow"]
+  IN["10 modalities @ 100 Hz<br/>ECG · ABP · PPG · CVP · CO2<br/>AWP · ICP · RESP-Imp · RESP-Flow · PAP"]
   IN --> SC["Scaler<br/>per-variate loc / scale"]
-  SC --> PT["Patchify<br/>200 samples = 2 s / token"]
+  SC --> PT["Patchify<br/>25 samples = 0.25 s / token"]
   PT --> PE["Residual-MLP projection<br/>+ modality embedding"]
   PE --> TR["Transformer encoder<br/>GQA · GLU FFN · RoPE · LSCNorm"]
-  SC -.->|"loc / scale as AdaLN conditioning"| TR
+  SC -.->|"window loc / scale + patch mean / std<br/>as AdaLN conditioning"| TR
   TR --> O1["reconstruction head<br/>→ features · anomaly scoring"]
   TR --> O2["cross-modal heads<br/>→ cross-modal reconstruction"]
   TR --> O3["block next-patch head<br/>→ forecasting · roll-out"]
@@ -33,87 +37,25 @@ flowchart LR
 ## 📖 Overview
 
 **CARMEN** is a foundation model for the continuous waveforms recorded at the bedside
-and in the operating room. A **single Transformer encoder (~30M parameters)** is
-pretrained across **9 signal modalities** and transfers to three families of task
+and in the operating room. A **single Transformer encoder (~174M parameters)** is
+pretrained across **10 signal modalities** and transfers to three families of task
 without architectural surgery: **feature extraction** for downstream heads,
 **cross-modal waveform reconstruction**, and **waveform forecasting**.
 
 Two design choices carry most of the weight. Every modality is tokenized the same
-way — raw patches, one shared encoder — so a single model covers all nine instead of
-one model per signal. And because per-patient normalization would otherwise throw
+way — raw patches, one shared encoder — so a single model covers all ten instead of
+one model per signal. And because per-window normalization would otherwise throw
 away the absolute level of a pressure waveform, the `(loc, scale)` stripped out by the
-scaler is fed back into **every** layer as AdaLN modulation (`LSCNorm`), keeping
-clinically meaningful magnitudes available to the encoder.
+scaler — together with each patch's own mean and standard deviation — is fed back into
+**every** layer as AdaLN modulation (`LSCNorm`), keeping clinically meaningful
+magnitudes available to the encoder. PPG amplitude is set by the device's gain rather
+than by physiology, so its absolute `(loc, scale)` is gated out of the conditioning.
 
-The nine modalities, grouped by what drives the waveform:
-
-<div align="center">
-<table>
-  <tr>
-    <th colspan="4" align="left">🫀&nbsp; Cardiovascular &nbsp;·&nbsp; <sub>locked to the cardiac cycle</sub></th>
-  </tr>
-  <tr>
-    <td><img src="figures/icons/ecg.svg" width="56" alt=""></td>
-    <td align="center"><code>0</code></td>
-    <td><b>ECG</b></td>
-    <td>electrocardiogram</td>
-  </tr>
-  <tr>
-    <td><img src="figures/icons/abp.svg" width="56" alt=""></td>
-    <td align="center"><code>1</code></td>
-    <td><b>ABP</b></td>
-    <td>arterial blood pressure, invasive</td>
-  </tr>
-  <tr>
-    <td><img src="figures/icons/ppg.svg" width="56" alt=""></td>
-    <td align="center"><code>2</code></td>
-    <td><b>PPG</b></td>
-    <td>photoplethysmography — peripheral pulse</td>
-  </tr>
-  <tr>
-    <td><img src="figures/icons/cvp.svg" width="56" alt=""></td>
-    <td align="center"><code>3</code></td>
-    <td><b>CVP</b></td>
-    <td>central venous pressure</td>
-  </tr>
-  <tr>
-    <td><img src="figures/icons/icp.svg" width="56" alt=""></td>
-    <td align="center"><code>6</code></td>
-    <td><b>ICP</b></td>
-    <td>intracranial pressure</td>
-  </tr>
-  <tr>
-    <th colspan="4" align="left">🫁&nbsp; Respiratory &nbsp;·&nbsp; <sub>locked to the ventilation cycle</sub></th>
-  </tr>
-  <tr>
-    <td><img src="figures/icons/co2.svg" width="56" alt=""></td>
-    <td align="center"><code>4</code></td>
-    <td><b>CO2</b></td>
-    <td>capnography — expired CO₂</td>
-  </tr>
-  <tr>
-    <td><img src="figures/icons/awp.svg" width="56" alt=""></td>
-    <td align="center"><code>5</code></td>
-    <td><b>AWP</b></td>
-    <td>airway pressure</td>
-  </tr>
-  <tr>
-    <td><img src="figures/icons/resp_impedance.svg" width="56" alt=""></td>
-    <td align="center"><code>7</code></td>
-    <td><b>RESP_Impedance</b></td>
-    <td>chest-impedance respiration</td>
-  </tr>
-  <tr>
-    <td><img src="figures/icons/resp_flow.svg" width="56" alt=""></td>
-    <td align="center"><code>8</code></td>
-    <td><b>RESP_Flow</b></td>
-    <td>ventilator flow</td>
-  </tr>
-</table>
-</div>
+The modalities are ECG, ABP, PPG, CVP, CO2, AWP, ICP, RESP_Impedance, RESP_Flow and
+PAP (`signal_type` 0–9; see `carmen.SIGNAL_TYPE_NAMES`).
 
 > [!IMPORTANT]
-> CARMEN is pretrained at **100 Hz** with a patch size of **200 samples (2 s/token)**.
+> CARMEN is pretrained at **100 Hz** with a patch size of **25 samples (0.25 s/token)**.
 > Resample your signals to 100 Hz before use.
 
 > [!NOTE]
@@ -239,12 +181,13 @@ sample = BiosignalSample(
     session_id="patient-001",   # samples sharing a session are paired cross-modally
     start_sample=0,
 )
-batch = PackCollate(max_length=8192, patch_size=200)([sample])
+batch = PackCollate(max_length=8192, patch_size=25)([sample])
 ```
 
 `collate_mode="any_variate"` (default) groups a patient's modalities into one row so
 the encoder can attend across them; `collate_mode="ci"` treats each signal as an
-independent row.
+independent row. With several modalities in a row, `task="next_pred"` is causal over
+physical time (`start_sample`), so a modality never sees another's future.
 
 </details>
 

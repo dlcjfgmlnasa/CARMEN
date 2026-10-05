@@ -78,12 +78,20 @@ class DownstreamModelWrapper(nn.Module):
         Pretrained checkpoint path (``.pt``).
     device:
         Device to load the model onto.
+    patch_stride:
+        Override the patch stride for overlapping-patch inference (finer tokens
+        from the same weights). Must divide ``patch_size``. ``None`` keeps the
+        checkpoint's stride.
+    rope_pi:
+        With overlapping patches, interpolate RoPE positions to physical spacing.
     """
 
     def __init__(
         self,
         checkpoint_path: str | Path,
         device: str | torch.device = "cuda",
+        patch_stride: int | None = None,
+        rope_pi: bool = True,
     ) -> None:
         super().__init__()
         self.device = torch.device(device)
@@ -96,7 +104,11 @@ class DownstreamModelWrapper(nn.Module):
             raise ValueError(f"Checkpoint has no 'config' key: {checkpoint_path}")
         config = ModelConfig.from_dict(state["config"])
 
+        if patch_stride is not None:
+            config.stride = patch_stride  # not a learned parameter; weights unchanged
+
         self.model: CARMEN = CARMEN.from_config(config)
+        self.model.rope_pi = rope_pi
         self.model.to(self.device)
 
         # 2. Load state dict

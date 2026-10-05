@@ -15,7 +15,7 @@ from carmen import CARMEN, ModelConfig, make_batch
 
 def main() -> None:
     cfg = ModelConfig(
-        d_model=128, num_layers=2, patch_size=100, num_heads=4, num_signal_types=9
+        d_model=128, num_layers=2, patch_size=100, num_heads=4, num_signal_types=10
     )
     model = CARMEN.from_config(cfg).eval()
     n_params = sum(p.numel() for p in model.parameters())

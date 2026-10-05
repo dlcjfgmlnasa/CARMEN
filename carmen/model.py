@@ -112,8 +112,8 @@ class CARMEN(nn.Module):
     dropout_p:
         Dropout probability.
     num_signal_types:
-        Number of modalities: 9 — ECG(0), ABP(1), PPG(2), CVP(3), CO2(4), AWP(5),
-        ICP(6), RESP_Impedance(7), RESP_Flow(8).
+        Number of modalities: 10 — ECG(0), ABP(1), PPG(2), CVP(3), CO2(4), AWP(5),
+        ICP(6), RESP_Impedance(7), RESP_Flow(8), PAP(9).
     use_modality_embed:
         Whether to add the per-modality (signal_type) embedding to each token.
     next_block_size:
@@ -127,7 +127,23 @@ class CARMEN(nn.Module):
         Inference never uses it; it is kept so pretrained checkpoints load with no
         missing/unexpected keys.
     d_cond:
-        Width of the (loc, scale) conditioning vector fed to every LSCNorm.
+        Width of the conditioning vector fed to every LSCNorm.
+    cond_trend_mode:
+        ``"none"`` — the conditioning input is the window ``[loc, scale]``.
+        ``"patchls"`` — additionally each patch's own mean and std, in units of the
+        window scale, which gives the conditioning path time resolution.
+    mask_cond_trend:
+        Zero the per-patch statistics at [MASK]-replaced positions; they describe
+        the hidden patch itself and would otherwise leak its content.
+    gate_unitless_cond:
+        Block the conditioning of the modalities in ``gated_cond_signal_types``.
+        Their absolute amplitude is set by device gain, not physiology.
+    gated_cond_signal_types:
+        Modalities to gate. ``None`` means ECG(0), PPG(2), RESP_Impedance(7).
+    gate_absolute_only:
+        Gate only the window ``[loc, scale]`` columns and keep the per-patch
+        (relative, gain-invariant) columns. Otherwise the whole conditioning output
+        is zeroed for gated modalities.
     """
 
     def __init__(
@@ -143,18 +159,34 @@ class CARMEN(nn.Module):
         use_var_attn_bias: bool = True,
         scaler: PackedScaler | None = None,
         dropout_p: float = 0.0,
-        num_signal_types: int = 9,
+        num_signal_types: int = 10,
         use_modality_embed: bool = True,
         next_block_size: int = 4,
         next_head_d_inner: int | None = None,
         contrastive_proj_dim: int = 0,
         d_cond: int = 16,
+        cond_trend_mode: str = "none",
+        mask_cond_trend: bool = True,
+        gate_unitless_cond: bool = False,
+        gated_cond_signal_types: list[int] | tuple[int, ...] | None = None,
+        gate_absolute_only: bool = False,
     ) -> None:
         super().__init__()
         self.d_model = d_model
         self.patch_size = patch_size
         self.num_signal_types = num_signal_types
         self.d_cond = d_cond
+        if cond_trend_mode not in ("none", "patchls"):
+            raise ValueError(f"unsupported cond_trend_mode: {cond_trend_mode!r}")
+        self.cond_trend_mode = cond_trend_mode
+        self.mask_cond_trend = mask_cond_trend
+        self.gate_unitless_cond = gate_unitless_cond
+        self.gate_absolute_only = gate_absolute_only
+        self._gated_signal_types = (
+            tuple(gated_cond_signal_types)
+            if gated_cond_signal_types is not None
+            else (0, 2, 7)
+        )
 
         # 1. Scaler (point-level)
         self.scaler = scaler or PackedStdScaler()
@@ -165,6 +197,10 @@ class CARMEN(nn.Module):
             d_model=d_model,
             stride=stride,
         )
+        # RoPE position interpolation for overlapping-stride inference: positions
+        # become time_id * stride / patch_size, the physical spacing seen in
+        # training. No effect when stride == patch_size.
+        self.rope_pi = True
 
         # 3. Transformer encoder
         num_heads = num_heads or d_model // 64
@@ -198,10 +234,12 @@ class CARMEN(nn.Module):
             self.signal_type_embed = nn.Embedding(num_signal_types, d_model)
 
         # 5. Loc/scale AdaLN conditioning (preserves per-patient absolute-level info).
-        # (loc, scale) -> d_cond vector -> LSCNorm modulation input of every encoder
-        # layer. The non-linearity is what gives the conditioning its expressiveness.
+        # (loc, scale[, patch mean, patch std]) -> d_cond vector -> LSCNorm
+        # modulation input of every encoder layer. The non-linearity is what gives
+        # the conditioning its expressiveness.
+        cond_in_dim = 2 + (2 if cond_trend_mode == "patchls" else 0)
         self.cond_proj = nn.Sequential(
-            nn.Linear(2, self.d_cond),
+            nn.Linear(cond_in_dim, self.d_cond),
             nn.SiLU(),
             nn.Linear(self.d_cond, self.d_cond),
         )
@@ -371,11 +409,56 @@ class CARMEN(nn.Module):
         patch_loc = loc[:, patch_starts, :]  # (B, N, 1)
         patch_scale = scale[:, patch_starts, :]  # (B, N, 1)
 
-        # AdaLN: loc/scale -> cond_proj -> LSCNorm modulation of every encoder layer
-        loc_scale = torch.cat([patch_loc, patch_scale], dim=-1)  # (B, N, 2)
-        ada_cond = self.cond_proj(loc_scale)  # (B, N, d_cond)
-        ada_cond = ada_cond * valid_token  # padding positions -> 0
+        # AdaLN input: window [loc, scale], plus per-patch [mean, std] for "patchls".
+        # Patches are already window-normalized, so their mean/std are relative to
+        # the window loc/scale (dimensionless, invariant to device gain).
+        cond_stats = torch.cat([patch_loc, patch_scale], dim=-1)  # (B, N, 2)
+        n_abs = cond_stats.shape[-1]  # window-level columns
+        if self.cond_trend_mode == "patchls":
+            cond_stats = torch.cat([
+                cond_stats,
+                patches.mean(dim=-1, keepdim=True).to(cond_stats.dtype),
+                patches.std(dim=-1, keepdim=True).to(cond_stats.dtype),
+            ], dim=-1)  # (B, N, 4)
+
+        gated: torch.Tensor | None = None  # (B, N) — patches whose cond is gated
+        if self.gate_unitless_cond and patch_signal_types is not None:
+            gated = torch.zeros_like(patch_signal_types, dtype=torch.bool)
+            for st in self._gated_signal_types:
+                gated |= patch_signal_types == st
+            if self.gate_absolute_only:
+                # Zero only the window-level columns; the relative patch columns stay.
+                keep = torch.ones_like(cond_stats)
+                keep[..., :n_abs] = (~gated).unsqueeze(-1).to(cond_stats.dtype)
+                cond_stats = cond_stats * keep
+
+        def _build_ada(cs: torch.Tensor) -> torch.Tensor:
+            """(B, N, C) conditioning statistics -> (B, N, d_cond) AdaLN vector."""
+            ada = self.cond_proj(cs)  # (B, N, d_cond)
+            if gated is not None and not self.gate_absolute_only:
+                # Gate the output, not the input: an input-side zero would still
+                # pass cond_proj's bias through.
+                ada = ada * (~gated).unsqueeze(-1)
+            return ada * valid_token  # padding positions -> 0
+
+        ada_cond = _build_ada(cond_stats)
         cond = cond * valid_token
+
+        # Per-patch statistics describe the patch itself, so at [MASK]-replaced
+        # positions they would hand the hidden content back. Zero them there.
+        if (
+            task == "masked"
+            and self.mask_cond_trend
+            and cond_stats.shape[-1] > n_abs
+            and extra_content_mask is not None
+        ):
+            cs = cond_stats.clone()
+            cs[..., n_abs:] = torch.where(
+                extra_content_mask.unsqueeze(-1),
+                torch.zeros_like(cs[..., n_abs:]),
+                cs[..., n_abs:],
+            )
+            ada_cond = _build_ada(cs)
 
         # 6. Base attention mask: attend only within the same sample, valid patches only
         attn_mask = (
@@ -384,8 +467,12 @@ class CARMEN(nn.Module):
             & patch_mask.unsqueeze(-1)
         )  # (B, N, N)
         if task == "next_pred":
-            causal_tri = torch.tril(torch.ones(n, n, dtype=torch.bool, device=device))
-            attn_mask = attn_mask & causal_tri.unsqueeze(0)
+            # Causal over physical time (abs_time_id), not packed index: with several
+            # variates in a row, a later-packed variate must not see an earlier one's
+            # future. Same-time cross-modal attention is allowed.
+            attn_mask = attn_mask & (
+                abs_time_id.unsqueeze(-1) >= abs_time_id.unsqueeze(-2)
+            )
 
         # 7. Encoder input: [MASK]-replace the requested positions, then add conditioning
         x = patch_embed
@@ -394,11 +481,23 @@ class CARMEN(nn.Module):
             x = torch.where(extra_content_mask.unsqueeze(-1), mask_token, patch_embed)
         x = x + cond
 
+        # RoPE uses the variate-relative index, interpolated to physical spacing
+        # when patches overlap.
+        if self.patch_embed.stride < self.patch_size and self.rope_pi:
+            rope_time_id = time_id.to(torch.float32) * (
+                self.patch_embed.stride / self.patch_size
+            )
+        else:
+            rope_time_id = time_id
+
+        # One variate per sample (collate_mode="ci"): the variate bias is a constant
+        # within every attended block, so the encoder skips it.
+        single_variate = not bool((p_vid > 1).any())
         encoded = self.encoder(
             x,
             attn_mask=attn_mask,
-            var_id=p_vid,
-            time_id=time_id,  # RoPE uses the variate-relative index
+            var_id=None if single_variate else p_vid,
+            time_id=rope_time_id,
             cond=ada_cond,
         )
 
