@@ -247,9 +247,6 @@ of Health & Welfare, Republic of Korea (grant number: RS-2024-00439677; NTIS num
 
 ## 📜 Citation
 
-CARMEN has been accepted to the AI4Health Workshop at NeurIPS 2026; the full paper is in
-preparation. Until a citable version is out, please cite this repository:
-
 ```bibtex
 @software{carmen2026,
   title  = {CARMEN: A Cardiorespiratory Foundation Model for Continuous Physiological Waveforms},
