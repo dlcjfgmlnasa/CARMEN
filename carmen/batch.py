@@ -3,11 +3,14 @@
 
 from __future__ import annotations
 
+import warnings
+from collections import Counter
+
 import torch
 
 from carmen.data.collate import PackCollate, PackedBatch
 from carmen.data.sample import BiosignalSample
-from carmen.data.signal_types import SIGNAL_KEY_TO_TYPE
+from carmen.data.signal_types import SIGNAL_KEY_TO_TYPE, SIGNAL_TYPE_NAMES
 
 _BATCH_TENSOR_FIELDS = (
     "values",
@@ -55,9 +58,10 @@ def make_batch(
     Notes
     -----
     In ``"any_variate"`` mode ``PackCollate`` trims all variates of a patient to a
-    common length so they pair up across modalities, which can drop signals shorter
-    than ``5 * patch_size`` samples. Give each signal enough length, or use
-    ``collate_mode="ci"`` for a single short signal.
+    common length so they pair up across modalities. A signal shorter than
+    ``5 * patch_size`` samples is dropped, and with unequal lengths a signal shorter
+    than the (randomly drawn) common length is dropped too. A warning names any
+    dropped modality. Pass equal-length signals, or use ``collate_mode="ci"``.
     """
     samples: list[BiosignalSample] = []
     for rec_idx, (modality, values) in enumerate(signals):
@@ -85,7 +89,17 @@ def make_batch(
         patch_size=patch_size,
         stride=stride,
     )
-    return collate(samples)
+    batch = collate(samples)
+    dropped = Counter(s.signal_type for s in samples) - Counter(batch.signal_types.tolist())
+    if dropped:
+        names = ", ".join(SIGNAL_TYPE_NAMES.get(st, str(st)) for st in sorted(dropped.elements()))
+        warnings.warn(
+            f"make_batch: dropped {names}: too short, or shorter than the common "
+            f"length chosen for collate_mode={collate_mode!r}. Pass equal-length "
+            "signals of at least 5 patches, or use collate_mode='ci'.",
+            stacklevel=2,
+        )
+    return batch
 
 
 def to_device(batch: PackedBatch, device: str | torch.device) -> PackedBatch:

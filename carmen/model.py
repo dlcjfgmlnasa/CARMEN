@@ -82,7 +82,7 @@ class BlockNextHead(nn.Module):
 
 
 class CARMEN(nn.Module):
-    """Cardiorespiratory foundation model. Raw-patch reconstruction for all signals.
+    """Cardiorespiratory foundation model: one encoder for every signal type.
 
     Every signal type goes through the same raw-patch pipeline. ``_encode()``
     factors out the common encoding stages so subclasses can extend it.
@@ -573,9 +573,10 @@ class CARMEN(nn.Module):
 
         Returns
         -------
-        dict with keys:
-            ``encoded``, ``patch_mask``, ``loc``, ``scale``,
-            ``patch_sample_id``, ``patch_variate_id``.
+        dict
+            ``encoded`` ``(B, N, d_model)`` plus ``patch_mask``, ``loc``, ``scale``,
+            ``patches``, ``patch_signal_types``, ``patch_sample_id``,
+            ``patch_variate_id`` and ``time_id`` (see ``forward``).
         """
         self.eval()
         out = self.forward(batch, task="masked")

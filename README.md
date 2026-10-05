@@ -131,12 +131,13 @@ features = wrapper.extract_features(batch)   # (B, d_model)
 ```
 
 > [!WARNING]
-> **Unequal-length inputs give non-deterministic batches.** With the default
-> `collate_mode="any_variate"`, `PackCollate` trims a patient's signals to one common
-> length so they pair up; when the inputs differ in length, that length is drawn at
-> random, so features can change between runs. For reproducible results, pass
-> equal-length signals, call `random.seed(0)` before building the batch, or use
-> `collate_mode="ci"`.
+> **Pass equal-length signals.** With the default `collate_mode="any_variate"`,
+> `PackCollate` trims a patient's signals to one common length so they pair up. When
+> the inputs differ in length, that length is drawn at random, and a signal shorter
+> than the drawn length is **dropped** from the batch (as is any signal shorter than
+> 5 patches = 1.25 s), so features can change between runs. `make_batch` warns when it
+> drops a signal. For reproducible results, pass equal-length signals, call
+> `random.seed(0)` before building the batch, or use `collate_mode="ci"`.
 
 ## 🧩 Inference API
 

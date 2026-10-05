@@ -111,7 +111,6 @@ class PackCollate:
         # Slot size for cross-modal grouping (same slot = same sample_id)
         self._slot_size = slot_size
         # Minimum variate length (in patches) for cross-modal matching in any_variate mode
-        # Clinical criterion 10s (patch_size=200 * 5 / 100Hz)
         self._min_patches = min_patches
 
         if patch_size is not None:
@@ -148,9 +147,10 @@ class PackCollate:
             group_samples.sort(key=lambda s: (s.signal_type, s.channel_idx))
 
             # Any-Variate mode: Multi-tier length truncate
-            # - variates shorter than 10s are clinically meaningless -> removed from the group
+            # - variates shorter than min_patches patches are removed from the group
             # - among the rest, randomly pick a valid tier (keeps >=2 variates)
-            # - keep only variates at least as long as the chosen tier and truncate to tier length
+            # - keep only variates at least as long as the chosen tier and truncate to tier
+            #   length; shorter variates are dropped from the batch
             # - result: all variates in a row have the same length -> perfect cross-modal pairing
             # CI mode is unaffected (each group has 1 variate, so the condition never triggers)
             group_limit: int | None = None
@@ -185,9 +185,6 @@ class PackCollate:
                     ]
                     if valid_tiers:
                         # Sqrt-length-weighted selection — slightly prefer longer tiers
-                        # Validated on real VitalDB data (crop ON):
-                        # sqrt gives mean ~5min, median 5min, 48% concentrated in 300-600s
-                        # -> no extreme short/long, distribution centered on clinical context
                         chosen = random.choices(
                             valid_tiers,
                             weights=[math.sqrt(L) for L in valid_tiers],
@@ -203,7 +200,7 @@ class PackCollate:
                     # Only 1 left -> cross-modal impossible, pack as a single variate
                     group_samples = [s for s, _ in sample_effs]
                 else:
-                    # All shorter than 10s -> exclude the group entirely
+                    # All shorter than min_patches patches -> exclude the group entirely
                     continue
 
             channel_values: list[torch.Tensor] = []  # each (time,)

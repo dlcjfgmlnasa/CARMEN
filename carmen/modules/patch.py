@@ -168,8 +168,6 @@ class PatchEmbedding(nn.Module):
             f"(max_length({l}) - patch_size({p})) % stride({s}) != 0. "
             f"PackCollate(patch_size={p}, stride={s}) is required."
         )
-        n = (l - p) // s + 1
-
         patches = values.unfold(-1, p, s)  # (B, N, P)
 
         # Check patch validity via unfold
