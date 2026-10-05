@@ -25,9 +25,9 @@
 
 **CARMEN** is a foundation model for the continuous waveforms recorded at the bedside
 and in the operating room. A **single Transformer encoder (~174M parameters)** is
-pretrained across **10 signal modalities** and transfers to three families of task
-without architectural surgery: **feature extraction** for downstream heads,
-**cross-modal waveform reconstruction**, and **waveform forecasting**.
+pretrained across **10 signal modalities** and serves as a frozen **feature
+extractor** for downstream clinical tasks — detection, prediction, outcome,
+estimation and phenotyping — with a light head on top.
 
 Two design choices carry most of the weight. Every modality is tokenized the same
 way — raw patches, one shared encoder — so a single model covers all ten instead of
@@ -119,12 +119,6 @@ feats = wrapper.extract_features(batch)                 # (B, d_model)      pool
 feats = wrapper.extract_features(batch, pool="none")    # (B, N, d_model)   per patch
 enc   = model.extract_features(batch)                   # dict of raw encoder outputs
 
-# ── Generation ───────────────────────────────────────────────────────────
-abp   = model.generate_cross_modal(batch, target_signal_type=1)["waveform"]
-                                                        # (B, N, patch_size)
-pred  = model.forecast(batch)                           # (B, N, K, patch_size)
-roll  = model.generate(batch, n_steps=10)               # (n_steps, B, patch_size)
-
 # ── Adaptation & scoring ─────────────────────────────────────────────────
 wrapper.inject_lora(rank=8)                             # LoRA on q_proj / v_proj
 score = wrapper.get_reconstruction_loss(batch, mask)    # scalar MSE, anomaly scoring
@@ -134,24 +128,6 @@ fine = DownstreamModelWrapper("checkpoints/carmen.pt", patch_stride=5)
                                                         # overlapping patches; RoPE positions
                                                         # are rescaled to physical spacing
 ```
-
-<details>
-<summary><b>Two attention modes — <code>task="masked"</code> vs <code>task="next_pred"</code></b></summary>
-
-<br/>
-
-`forward(batch, task=...)` selects both the attention pattern and the heads that run.
-
-**`task="masked"`** — bidirectional attention. Adds `reconstructed` and
-`cross_pred_per_type`; this is what `extract_features` and `generate_cross_modal` use.
-
-**`task="next_pred"`** — causal attention. Adds `next_pred` `(B, N, K, patch_size)`;
-this is what `forecast` and `generate` use.
-
-Either way you also get the encoder outputs — `encoded`, `patches`, `patch_mask`,
-`loc`, `scale`, `patch_sample_id`, `patch_variate_id`, `time_id`.
-
-</details>
 
 <details>
 <summary><b>Feeding your own data</b></summary>
@@ -170,7 +146,7 @@ sample = BiosignalSample(
     channel_idx=0, recording_idx=0, n_channels=1, win_start=0,
     sampling_rate=100.0,
     signal_type=CHANNEL_NAME_TO_SIGNAL_TYPE["ECG II"],   # -> 0
-    session_id="patient-001",   # samples sharing a session are paired cross-modally
+    session_id="patient-001",   # samples sharing a session are packed together
     start_sample=0,
 )
 batch = PackCollate(max_length=8192, patch_size=25)([sample])
@@ -178,20 +154,17 @@ batch = PackCollate(max_length=8192, patch_size=25)([sample])
 
 `collate_mode="any_variate"` (default) groups a patient's modalities into one row so
 the encoder can attend across them; `collate_mode="ci"` treats each signal as an
-independent row. With several modalities in a row, `task="next_pred"` is causal over
-physical time (`start_sample`), so a modality never sees another's future.
+independent row.
 
 </details>
 
 ## 🔬 Examples
 
-📓 &nbsp;**[`quickstart.ipynb`](examples/quickstart.ipynb)** — end to end: build → features → generate
+📓 &nbsp;**[`quickstart.ipynb`](examples/quickstart.ipynb)** — end to end: build → features → pretrained weights
 
 - **[`00_smoke_test.py`](examples/00_smoke_test.py)** — build from config and run a forward, no weights needed
 - **[`01_extract_features.py`](examples/01_extract_features.py)** — load a checkpoint, extract pooled features
 - **[`02_downstream_probe.py`](examples/02_downstream_probe.py)** — linear probe and LoRA on frozen features
-- **[`03_cross_modal_generation.py`](examples/03_cross_modal_generation.py)** — ECG + PPG → ABP
-- **[`04_forecasting.py`](examples/04_forecasting.py)** — block forecast and autoregressive roll-out
 
 ```bash
 python examples/00_smoke_test.py
@@ -217,12 +190,6 @@ checkpoints/         put downloaded weights here (gitignored)
 
 ## ⚠️ Caveats
 
-- **Cross-modal reliability.** Not every source → target pair is physiologically
-  supported. The pairs the model was trained to transfer across are listed in
-  `carmen.CROSS_PRED_ALLOWED_PAIRS` (ECG↔ABP, ECG↔PPG, ABP↔PPG, AWP↔RESP_Flow).
-- **Denormalized output is approximate.** `generate_cross_modal(..., denormalize=True)`
-  rescales with the *source* signal's `loc`/`scale`, because the target's own level is
-  unknown. Treat the absolute magnitude accordingly.
 - **`any_variate` batching is non-deterministic.** `PackCollate` trims a patient's
   variates to one common length so they pair up; with unequal-length inputs that length
   is drawn at random. Seed `random.seed()` if you need reproducible batches, or use
