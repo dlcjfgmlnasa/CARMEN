@@ -616,9 +616,7 @@ class CARMEN(nn.Module):
         batch:
             PackedBatch containing only source signals.
         target_signal_type:
-            Target signal type to generate (0=ECG, 1=ABP, 2=PPG, ...). Reliable
-            source/target pairs are listed in
-            ``carmen.data.signal_types.CROSS_PRED_ALLOWED_PAIRS``.
+            Target signal type to generate (0=ECG, 1=ABP, 2=PPG, ...).
         denormalize:
             If ``True``, denormalize with the source loc/scale (approximate — the
             target's own level is unknown).

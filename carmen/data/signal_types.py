@@ -68,22 +68,6 @@ MECHANISM_GROUP_NAMES: dict[int, str] = {
 }
 
 
-# ── Cross-Pred Allowed Pairs ──────────────────────────────────
-# Signal-type pairs the model was trained to reconstruct across modalities
-# (physiologically causal waveform transfer). Useful as a reference for which
-# cross-modal generation targets are reliable.
-#   (0, 1) ECG <-> ABP — R-peak triggers contraction; shape is cardiac-dominated
-#   (0, 2) ECG <-> PPG — cardiac cycle, peripheral pulse wave
-#   (1, 2) ABP <-> PPG — arterial pulse wave (nearly isomorphic)
-#   (5, 8) AWP <-> RESP_Flow — airway pressure <-> flow (P-Q equation of motion)
-CROSS_PRED_ALLOWED_PAIRS: set[tuple[int, int]] = {
-    (0, 1),
-    (0, 2),
-    (1, 2),
-    (5, 8),
-}
-
-
 # channel name -> signal_type
 # All ECG lead labels converge to 0; ABP variants (Radial/Femoral/ART/FEM) to 1.
 # RESP/Impedance -> 7 (RESP_Impedance), FLOW/FLOW_WAV -> 8 (RESP_Flow).

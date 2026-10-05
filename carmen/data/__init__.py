@@ -11,7 +11,6 @@ from carmen.data.collate import PackCollate, PackedBatch
 from carmen.data.sample import BiosignalSample
 from carmen.data.signal_types import (
     CHANNEL_NAME_TO_SIGNAL_TYPE,
-    CROSS_PRED_ALLOWED_PAIRS,
     MECHANISM_GROUP,
     SIGNAL_KEY_TO_TYPE,
     SIGNAL_TYPE_NAMES,
@@ -26,6 +25,5 @@ __all__ = [
     "SIGNAL_KEY_TO_TYPE",
     "SIGNAL_TYPE_TO_KEY",
     "CHANNEL_NAME_TO_SIGNAL_TYPE",
-    "CROSS_PRED_ALLOWED_PAIRS",
     "MECHANISM_GROUP",
 ]
