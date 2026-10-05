@@ -1,5 +1,3 @@
-<div align="center">
-
 # CARMEN
 
 ### A Cardiorespiratory Foundation Model for Continuous Physiological Waveforms
@@ -10,12 +8,7 @@
 [![Modalities](https://img.shields.io/badge/modalities-10-teal.svg)](#-overview)
 [![Params](https://img.shields.io/badge/params-~174M-8A2BE2.svg)](#-overview)
 
-[**Model Weights**](https://github.com/dlcjfgmlnasa/CARMEN/releases) ·
-[**Quickstart Notebook**](examples/quickstart.ipynb) ·
-[**Examples**](examples) ·
-[**Inference API**](#-inference-api)
-
-</div>
+[**Quickstart Notebook**](examples/quickstart.ipynb) · [**Examples**](examples) · [**Inference API**](#-inference-api) · [**Model Weights**](#-model-weights) (coming soon)
 
 ## 📰 News
 
@@ -23,21 +16,57 @@
 
 ## 📖 Overview
 
-CARMEN is a foundation model for the continuous waveforms recorded at the bedside and in the operating room. A single Transformer encoder (~174M parameters) is pretrained on 10 signal modalities and used as a frozen feature extractor for downstream clinical tasks (detection, prediction, outcome, estimation and phenotyping), with only a lightweight head trained on top.
+**CARMEN** is a foundation model for the continuous waveforms recorded at the bedside
+and in the operating room. A **single Transformer encoder (~174M parameters)** is
+pretrained on **10 signal modalities** and used as a frozen **feature extractor** for
+downstream clinical tasks (detection, prediction, outcome, estimation and
+phenotyping), with only a lightweight head trained on top.
 
 Two design choices do most of the work:
 
-- **One tokenizer, one encoder.** Every modality is tokenized the same way, as raw patches fed to a shared encoder, so a single model covers all ten signals instead of one model per signal.
-- **Absolute level is preserved (`LSCNorm`).** Per-window normalization would otherwise discard the absolute level of a pressure waveform. The `(loc, scale)` removed by the scaler, together with each patch's own mean and standard deviation, is fed back into every layer as AdaLN modulation, so clinically meaningful magnitudes stay available to the encoder. PPG is the exception: its amplitude is set by device gain rather than physiology, so PPG is excluded from this conditioning altogether.
+- **One tokenizer, one encoder.** Every modality is tokenized the same way, as raw
+  patches fed to a shared encoder, so a single model covers all ten signals instead of
+  one model per signal.
+- **Absolute level is preserved (`LSCNorm`).** Per-window normalization would
+  otherwise discard the absolute level of a pressure waveform. The `(loc, scale)`
+  removed by the scaler, together with each patch's own mean and standard deviation,
+  is fed back into **every** layer as AdaLN modulation, so clinically meaningful
+  magnitudes stay available to the encoder. PPG is the exception: its amplitude is set
+  by device gain rather than physiology, so PPG is excluded from this conditioning
+  altogether.
 
-**Modalities** (`signal_type` 0–9, see `carmen.SIGNAL_TYPE_NAMES`): ECG, ABP, PPG, CVP, CO2, AWP, ICP, RESP_Impedance, RESP_Flow, PAP.
+> [!NOTE]
+> This repository is **inference-only** — the pretraining loop is not included.
+
+> [!WARNING]
+> **Research use only.** CARMEN is not a medical device and has not been cleared or
+> approved for clinical use. Do not use its outputs for diagnosis or to guide patient
+> care.
+
+## 📐 Input Requirements
+
+CARMEN conditions on the **absolute level** of each signal, so inputs must be in the
+units used during pretraining. A signal in the wrong unit will run without error but
+produce degraded features.
+
+| `signal_type` | Modality | `make_batch` key | Expected unit |
+| :-: | --- | --- | --- |
+| 0 | ECG | `"ecg"` | mV |
+| 1 | ABP | `"abp"` | mmHg |
+| 2 | PPG | `"ppg"` | arbitrary (device-dependent; absolute level is not used) |
+| 3 | CVP | `"cvp"` | mmHg |
+| 4 | CO2 | `"co2"` | mmHg (convert vol% × 7.13) |
+| 5 | AWP | `"awp"` | cmH₂O (convert hPa × 1.0197) |
+| 6 | ICP | `"icp"` | mmHg |
+| 7 | RESP_Impedance | `"resp_impedance"` | arbitrary (device-dependent impedance) |
+| 8 | RESP_Flow | `"resp_flow"` | L/min |
+| 9 | PAP | `"pap"` | mmHg |
+
+The authoritative mapping is `carmen.SIGNAL_TYPE_NAMES`.
 
 > [!IMPORTANT]
 > CARMEN is pretrained at **100 Hz** with a patch size of **25 samples (0.25 s/token)**.
 > Resample your signals to 100 Hz before use.
-
-> [!NOTE]
-> This repository is **inference-only** — the pretraining loop is not included.
 
 ## 🚀 Quick Start
 
@@ -50,18 +79,28 @@ pip install -e .              # or: pip install -r requirements.txt
 
 Requires Python ≥ 3.10, PyTorch ≥ 2.2, einops ≥ 0.7.
 
-### 🧠 Model weights
-
-> **Pretrained weights will be published here upon publication of the full paper.**
-> Until then this repository ships the model implementation and inference API only —
-> the release asset referenced below is not yet available. You can still build the
-> model from a config and run a forward pass without weights
-> (see [`examples/00_smoke_test.py`](examples/00_smoke_test.py)).
-
-Weights are distributed as a **GitHub Release asset** and are *not* committed to git.
-Download a checkpoint into `checkpoints/` — see [`checkpoints/README.md`](checkpoints/README.md):
+### ✅ Verify the install (no weights needed)
 
 ```bash
+python examples/00_smoke_test.py
+```
+
+This builds the model from a config with random weights and runs a forward pass. It is
+the only example that works before the pretrained weights are released.
+
+### 🧠 Model weights
+
+> [!NOTE]
+> **Pretrained weights are not yet available.** They will be published as a GitHub
+> Release asset upon publication of the full paper. Until then this repository ships
+> the model implementation and inference API only, and every example below that loads
+> `checkpoints/carmen.pt` requires the release.
+
+Once released, download the checkpoint into `checkpoints/` (see
+[`checkpoints/README.md`](checkpoints/README.md)); weights are *not* committed to git:
+
+```bash
+# available after release
 curl -L -o checkpoints/carmen.pt \
   https://github.com/dlcjfgmlnasa/CARMEN/releases/download/v2.0.0/carmen.pt
 ```
@@ -91,8 +130,13 @@ batch = make_batch(
 features = wrapper.extract_features(batch)   # (B, d_model)
 ```
 
-No checkpoint yet? `python examples/00_smoke_test.py` verifies the install against a
-randomly initialized model.
+> [!WARNING]
+> **Unequal-length inputs give non-deterministic batches.** With the default
+> `collate_mode="any_variate"`, `PackCollate` trims a patient's signals to one common
+> length so they pair up; when the inputs differ in length, that length is drawn at
+> random, so features can change between runs. For reproducible results, pass
+> equal-length signals, call `random.seed(0)` before building the batch, or use
+> `collate_mode="ci"`.
 
 ## 🧩 Inference API
 
@@ -119,10 +163,7 @@ fine = DownstreamModelWrapper("checkpoints/carmen.pt", patch_stride=5)
                                                         # are rescaled to physical spacing
 ```
 
-<details>
-<summary><b>Feeding your own data</b></summary>
-
-<br/>
+**Feeding your own data**
 
 `make_batch` covers the common case. For full control, build one `BiosignalSample` per
 channel and collate them with `PackCollate`:
@@ -146,15 +187,13 @@ batch = PackCollate(max_length=8192, patch_size=25)([sample])
 the encoder can attend across them; `collate_mode="ci"` treats each signal as an
 independent row.
 
-</details>
-
 ## 🔬 Examples
 
-📓 &nbsp;**[`quickstart.ipynb`](examples/quickstart.ipynb)** — end to end: build → features → pretrained weights
+📓 **[`quickstart.ipynb`](examples/quickstart.ipynb)** — end to end: build → features → pretrained weights
 
-- **[`00_smoke_test.py`](examples/00_smoke_test.py)** — build from config and run a forward, no weights needed
-- **[`01_extract_features.py`](examples/01_extract_features.py)** — load a checkpoint, extract pooled features
-- **[`02_downstream_probe.py`](examples/02_downstream_probe.py)** — linear probe and LoRA on frozen features
+- **[`00_smoke_test.py`](examples/00_smoke_test.py)** — build from config and run a forward pass, no weights needed
+- **[`01_extract_features.py`](examples/01_extract_features.py)** — load a checkpoint, extract pooled features *(requires weights)*
+- **[`02_downstream_probe.py`](examples/02_downstream_probe.py)** — linear probe and LoRA on frozen features *(requires weights)*
 
 ```bash
 python examples/00_smoke_test.py
@@ -177,18 +216,12 @@ examples/            runnable examples + quickstart notebook
 checkpoints/         put downloaded weights here (gitignored)
 ```
 
-## ⚠️ Caveats
-
-- **`any_variate` batching is non-deterministic.** `PackCollate` trims a patient's
-  variates to one common length so they pair up; with unequal-length inputs that length
-  is drawn at random. Seed `random.seed()` if you need reproducible batches, or use
-  `collate_mode="ci"`.
-
 ## 🙏 Acknowledgements
 
-This research was supported by a grant of the Korea Health Technology R&D Project through
-the Korea Health Industry Development Institute (KHIDI), funded by the Ministry of Health &
-Welfare, Republic of Korea (grant number : RS-2024-00439677 , NTIS number:2460003917)
+This research was supported by a grant of the Korea Health Technology R&D Project
+through the Korea Health Industry Development Institute (KHIDI), funded by the Ministry
+of Health & Welfare, Republic of Korea (grant number: RS-2024-00439677; NTIS number:
+2460003917).
 
 ## 📜 Citation
 
