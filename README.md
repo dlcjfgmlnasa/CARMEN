@@ -61,7 +61,7 @@ Requires Python ≥ 3.10, PyTorch ≥ 2.2, einops ≥ 0.7.
 
 ### 🧠 Model weights
 
-> **Pretrained weights will be published here upon acceptance of the paper.**
+> **Pretrained weights will be published here upon publication of the full paper.**
 > Until then this repository ships the model implementation and inference API only —
 > the release asset referenced below is not yet available. You can still build the
 > model from a config and run a forward pass without weights
@@ -128,6 +128,11 @@ roll  = model.generate(batch, n_steps=10)               # (n_steps, B, patch_siz
 # ── Adaptation & scoring ─────────────────────────────────────────────────
 wrapper.inject_lora(rank=8)                             # LoRA on q_proj / v_proj
 score = wrapper.get_reconstruction_loss(batch, mask)    # scalar MSE, anomaly scoring
+
+# ── Finer tokens from the same weights ───────────────────────────────────
+fine = DownstreamModelWrapper("checkpoints/carmen.pt", patch_stride=5)
+                                                        # overlapping patches; RoPE positions
+                                                        # are rescaled to physical spacing
 ```
 
 <details>
@@ -231,8 +236,8 @@ Welfare, Republic of Korea (grant number : RS-2024-00439677 , NTIS number:246000
 
 ## 📜 Citation
 
-A paper describing CARMEN is in preparation. Until it is out, please cite this
-repository:
+CARMEN has been accepted to the AI4Health Workshop at NeurIPS 2026; the full paper is in
+preparation. Until a citable version is out, please cite this repository:
 
 ```bibtex
 @software{carmen2026,
