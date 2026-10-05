@@ -46,28 +46,6 @@ SIGNAL_KEY_TO_TYPE: dict[str, int] = {
 SIGNAL_TYPE_TO_KEY: dict[int, str] = {v: k for k, v in SIGNAL_KEY_TO_TYPE.items()}
 
 
-# ── Mechanism Group ────────────────────────────────────────────
-# Cardiovascular (0): ECG, ABP, PPG, CVP, ICP, PAP — cardiac-cycle synchronized
-# Respiratory (1): CO2, AWP, RESP_Impedance, RESP_Flow — ventilation synchronized
-MECHANISM_GROUP: dict[int, int] = {
-    0: 0,  # ECG            -> Cardiovascular
-    1: 0,  # ABP            -> Cardiovascular
-    2: 0,  # PPG            -> Cardiovascular
-    3: 0,  # CVP            -> Cardiovascular
-    4: 1,  # CO2            -> Respiratory
-    5: 1,  # AWP            -> Respiratory
-    6: 0,  # ICP            -> Cardiovascular
-    7: 1,  # RESP_Impedance -> Respiratory
-    8: 1,  # RESP_Flow      -> Respiratory
-    9: 0,  # PAP            -> Cardiovascular
-}
-
-MECHANISM_GROUP_NAMES: dict[int, str] = {
-    0: "Cardiovascular",
-    1: "Respiratory",
-}
-
-
 # channel name -> signal_type
 # All ECG lead labels converge to 0; ABP variants (Radial/Femoral/ART/FEM) to 1.
 # RESP/Impedance -> 7 (RESP_Impedance), FLOW/FLOW_WAV -> 8 (RESP_Flow).

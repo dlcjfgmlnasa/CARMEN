@@ -20,7 +20,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import torch
-import torch.nn.functional as F
 from torch import nn
 
 from carmen.config import ModelConfig
@@ -256,56 +255,6 @@ class DownstreamModelWrapper(nn.Module):
             pooled = pooled * validity.unsqueeze(-1).float()
 
         return (pooled, validity) if return_validity else pooled
-
-    @torch.no_grad()
-    def forward_masked(self, batch: PackedBatch) -> dict[str, torch.Tensor]:
-        """Run ``model.forward(task="masked")`` on the wrapper's device.
-
-        Returns
-        -------
-        dict
-            ``reconstructed``, ``cross_pred_per_type``, ``encoded``, ``patch_mask``,
-            ``loc``, ``scale``, and the rest of the encoder outputs.
-        """
-        self.model.eval()
-        batch = self.batch_to_device(batch)
-        return self.model(batch, task="masked")
-
-    @torch.no_grad()
-    def get_reconstruction_loss(
-        self,
-        batch: PackedBatch,
-        mask: torch.Tensor,  # (B, N) bool — patches to score
-    ) -> torch.Tensor:
-        """Masked reconstruction MSE, for anomaly scoring.
-
-        Parameters
-        ----------
-        batch:
-            PackedBatch produced by PackCollate.
-        mask:
-            ``(B, N)`` bool — compute the MSE over patches where this is True.
-
-        Returns
-        -------
-        torch.Tensor
-            Scalar mean MSE over the selected patches (0 if none are selected).
-        """
-        self.model.eval()
-        batch = self.batch_to_device(batch)
-
-        out = self.model(batch, task="masked")
-        reconstructed = out["reconstructed"]  # (B, N, patch_size)
-        original_patches = out["patches"]  # (B, N, patch_size), normalized
-
-        mask = mask.to(self.device)
-        if not mask.any():
-            return reconstructed.new_tensor(0.0)
-
-        return F.mse_loss(
-            reconstructed[mask],  # (M, patch_size)
-            original_patches[mask],  # (M, patch_size)
-        )
 
     def batch_to_device(self, batch: PackedBatch) -> PackedBatch:
         """Move the PackedBatch tensors to ``self.device``.

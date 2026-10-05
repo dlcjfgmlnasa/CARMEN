@@ -122,10 +122,6 @@ class CARMEN(nn.Module):
         autoregressively) from ``encoded[n]``.
     next_head_d_inner:
         Inner dimension of ``BlockNextHead``'s trunk. ``None`` means ``d_model``.
-    contrastive_proj_dim:
-        Output dim of the pretraining contrastive projection head. 0 disables it.
-        Inference never uses it; it is kept so pretrained checkpoints load with no
-        missing/unexpected keys.
     d_cond:
         Width of the conditioning vector fed to every LSCNorm.
     cond_trend_mode:
@@ -163,7 +159,6 @@ class CARMEN(nn.Module):
         use_modality_embed: bool = True,
         next_block_size: int = 4,
         next_head_d_inner: int | None = None,
-        contrastive_proj_dim: int = 0,
         d_cond: int = 16,
         cond_trend_mode: str = "none",
         mask_cond_trend: bool = True,
@@ -264,16 +259,7 @@ class CARMEN(nn.Module):
             for st in range(num_signal_types)
         })
 
-        # 9. Contrastive projection head (pretraining only; see the class docstring)
-        self.contrastive_proj_dim = contrastive_proj_dim
-        if contrastive_proj_dim > 0:
-            self.contrastive_proj = nn.Sequential(
-                nn.Linear(d_model, d_model),
-                nn.GELU(),
-                nn.Linear(d_model, contrastive_proj_dim),
-            )
-
-        # 10. Learnable [MASK] token
+        # 9. Learnable [MASK] token
         self.mask_token = nn.Parameter(torch.randn(1, 1, d_model) * 0.02)
 
     @classmethod
@@ -565,8 +551,6 @@ class CARMEN(nn.Module):
                 self.cross_heads[str(st)](encoded)
                 for st in range(self.num_signal_types)
             ], dim=2)  # (B, N, num_signal_types, patch_size)
-            if self.contrastive_proj_dim > 0:
-                out_dict["contrastive_z"] = self.contrastive_proj(encoded)
         elif task == "next_pred":
             # ── Block next-patch prediction ──
             # encoded[n] -> the K future patches n+1 ... n+K, predicted in parallel.

@@ -119,9 +119,8 @@ feats = wrapper.extract_features(batch)                 # (B, d_model)      pool
 feats = wrapper.extract_features(batch, pool="none")    # (B, N, d_model)   per patch
 enc   = model.extract_features(batch)                   # dict of raw encoder outputs
 
-# ── Adaptation & scoring ─────────────────────────────────────────────────
+# ── Adaptation ───────────────────────────────────────────────────────────
 wrapper.inject_lora(rank=8)                             # LoRA on q_proj / v_proj
-score = wrapper.get_reconstruction_loss(batch, mask)    # scalar MSE, anomaly scoring
 
 # ── Finer tokens from the same weights ───────────────────────────────────
 fine = DownstreamModelWrapper("checkpoints/carmen.pt", patch_stride=5)
@@ -180,7 +179,6 @@ carmen/
 ├── checkpoint.py    checkpoint save / load
 ├── wrapper.py       DownstreamModelWrapper (load / freeze / LoRA), LinearProbe
 ├── batch.py         make_batch / to_device — raw signals -> PackedBatch
-├── loss.py          MaskedPatchLoss (reconstruction scoring)
 ├── data/            PackCollate (bin-packing), BiosignalSample, signal-type maps
 └── modules/         attention (GQA), GLU FFN, RMSNorm / LSCNorm, patch embedding,
                      packed scalers, RoPE / attention bias

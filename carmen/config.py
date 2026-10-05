@@ -21,6 +21,7 @@ _LEGACY_KEYS: dict[str, str] = {
 # different architecture, so loading it fails loudly instead.
 _UNSUPPORTED: dict[str, object] = {
     "use_moe": False,
+    "contrastive_proj_dim": 0,
     "use_lscnorm": True,
     "patch_local_norm": False,
     "cond_local_trend": False,
@@ -68,8 +69,6 @@ class ModelConfig:
         Number of future patches (K) each position predicts in parallel.
     next_head_d_inner:
         Inner dimension of ``BlockNextHead``'s trunk. ``None`` means ``d_model``.
-    contrastive_proj_dim:
-        Output dim of the pretraining contrastive projection head. 0 disables it.
     d_cond:
         Width of the AdaLN conditioning vector.
     cond_trend_mode, mask_cond_trend, gate_unitless_cond, gated_cond_signal_types,
@@ -98,7 +97,6 @@ class ModelConfig:
     # Heads
     next_block_size: int = 4
     next_head_d_inner: int | None = None
-    contrastive_proj_dim: int = 0
 
     # AdaLN conditioning (loc/scale injected into every layer's LSCNorm)
     d_cond: int = 16
