@@ -15,10 +15,10 @@ from carmen import CARMEN, ModelConfig, make_batch
 
 def main() -> None:
     # A tiny model on the release model's input path: 0.25 s patches, per-patch
-    # conditioning, PPG loc/scale gated. Only the width and depth are smaller.
+    # conditioning, PPG and RESP_Impedance gated. Only the width and depth are smaller.
     cfg = ModelConfig(
         d_model=128, num_layers=2, patch_size=25, num_heads=4, num_signal_types=10,
-        cond_trend_mode="patchls", gate_unitless_cond=True, gated_cond_signal_types=[2],
+        cond_trend_mode="patchls", gate_unitless_cond=True, gated_cond_signal_types=[2, 7],
     )
     model = CARMEN.from_config(cfg).eval()
     n_params = sum(p.numel() for p in model.parameters())

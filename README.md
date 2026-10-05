@@ -32,9 +32,9 @@ Two design choices do most of the work:
   otherwise discard the absolute level of a pressure waveform. The `(loc, scale)`
   removed by the scaler, together with each patch's own mean and standard deviation,
   is fed back into **every** layer as AdaLN modulation, so clinically meaningful
-  magnitudes stay available to the encoder. PPG is the exception: its amplitude is set
-  by device gain rather than physiology, so PPG is excluded from this conditioning
-  altogether.
+  magnitudes stay available to the encoder. PPG and RESP_Impedance are the exceptions:
+  their amplitude is set by device gain rather than physiology, so they are excluded
+  from this conditioning altogether.
 
 > [!NOTE]
 > This repository is **inference-only** — the pretraining loop is not included.
@@ -46,9 +46,9 @@ Two design choices do most of the work:
 
 ## 📐 Input Requirements
 
-CARMEN conditions on the **absolute level** of each signal (PPG excepted), so inputs
-must be in the units used during pretraining. A signal in the wrong unit will run
-without error but produce degraded features.
+CARMEN conditions on the **absolute level** of each signal (PPG and RESP_Impedance
+excepted), so inputs must be in the units used during pretraining. A signal in the
+wrong unit will run without error but produce degraded features.
 
 | `signal_type` | Modality | `make_batch` key | Expected unit |
 | :-: | --- | --- | --- |
@@ -59,7 +59,7 @@ without error but produce degraded features.
 | 4 | CO2 | `"co2"` | mmHg (convert vol% × 7.13) |
 | 5 | AWP | `"awp"` | cmH₂O (convert hPa × 1.0197) |
 | 6 | ICP | `"icp"` | mmHg |
-| 7 | RESP_Impedance | `"resp_impedance"` | arbitrary (device-dependent impedance) |
+| 7 | RESP_Impedance | `"resp_impedance"` | arbitrary (device-dependent; absolute level is not used) |
 | 8 | RESP_Flow | `"resp_flow"` | L/min |
 | 9 | PAP | `"pap"` | mmHg |
 
