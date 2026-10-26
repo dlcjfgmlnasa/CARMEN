@@ -14,6 +14,36 @@ import torch
 from torch import nn
 
 
+HF_REPO_ID = "rinai1122/CARMEN"
+PRETRAINED = ("carmen-small", "carmen-base", "carmen-large")
+
+
+def resolve_checkpoint(name_or_path: str | Path) -> Path:
+    """Return a local checkpoint path.
+
+    An existing file is returned as is. A released model name (``"carmen-base"``,
+    or just ``"base"``) is downloaded from the Hugging Face Hub (``HF_REPO_ID``)
+    and cached; this needs ``pip install huggingface_hub``.
+    """
+    path = Path(name_or_path)
+    if path.is_file():
+        return path
+    name = str(name_or_path).removesuffix(".pt")
+    if not name.startswith("carmen-"):
+        name = f"carmen-{name}"
+    if name not in PRETRAINED:
+        raise FileNotFoundError(
+            f"No checkpoint file {name_or_path!r} and not a released model {PRETRAINED}"
+        )
+    try:
+        from huggingface_hub import hf_hub_download
+    except ImportError as e:
+        raise ImportError(
+            "Downloading released weights needs `pip install huggingface_hub`"
+        ) from e
+    return Path(hf_hub_download(HF_REPO_ID, f"{name}.pt"))
+
+
 def save_checkpoint(
     path: str | Path,
     model: nn.Module,

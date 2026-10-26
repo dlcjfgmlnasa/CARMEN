@@ -6,9 +6,10 @@
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.2+-EE4C2C.svg?logo=pytorch&logoColor=white)](https://pytorch.org/)
 [![Modalities](https://img.shields.io/badge/modalities-10-teal.svg)](#-overview)
+[![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-CARMEN-FFD21E.svg)](https://huggingface.co/rinai1122/CARMEN)
 [![Sizes](https://img.shields.io/badge/sizes-52M%20%7C%20174M%20%7C%20410M-8A2BE2.svg)](#-model-weights)
 
-[**Quickstart Notebook**](examples/quickstart.ipynb) · [**Examples**](examples) · [**Inference API**](#-inference-api) · [**Model Weights**](#-model-weights) (coming soon)
+[**Quickstart Notebook**](examples/quickstart.ipynb) · [**Examples**](examples) · [**Inference API**](#-inference-api) · [**Model Weights**](https://huggingface.co/rinai1122/CARMEN)
 
 ## 📰 News
 
@@ -100,10 +101,9 @@ end (the first sections of the quickstart notebook also run without weights).
 ### 🧠 Model weights
 
 > [!NOTE]
-> **Pretrained weights are not yet available.** They will be published as GitHub
-> Release assets upon publication of the full paper. Until then this repository ships
-> the model implementation and inference API only, and every example below that loads
-> a checkpoint requires the release.
+> Weights are hosted on the Hugging Face Hub at
+> [**rinai1122/CARMEN**](https://huggingface.co/rinai1122/CARMEN). Public access opens
+> upon publication of the full paper.
 
 CARMEN comes in three sizes. They share the input pipeline (10 modalities, 100 Hz,
 0.25 s patches, same conditioning) and pretraining recipe; only width and depth differ.
@@ -114,14 +114,19 @@ CARMEN comes in three sizes. They share the input pipeline (10 modalities, 100 H
 | **CARMEN-Base** | **174M** | 768 | 24 | 12 | `carmen-base.pt` | ~700 MB |
 | CARMEN-Large | 410M | 1024 | 32 | 16 | `carmen-large.pt` | ~1.6 GB |
 
-The examples default to **Base**. Once released, download a checkpoint into
-`checkpoints/` (see [`checkpoints/README.md`](checkpoints/README.md)); weights are *not*
-committed to git:
+The examples default to **Base**. Pass a model name instead of a path and the weights
+are downloaded from the Hub and cached (needs `pip install -e ".[hf]"`):
+
+```python
+model = CARMEN.from_pretrained("carmen-base")          # or "carmen-small" / "carmen-large"
+wrapper = DownstreamModelWrapper("carmen-base", device="cuda")
+```
+
+Or download the file yourself into `checkpoints/` (weights are *not* committed to git;
+see [`checkpoints/README.md`](checkpoints/README.md)):
 
 ```bash
-# available after release — swap "base" for "small" or "large"
-curl -L -o checkpoints/carmen-base.pt \
-  https://github.com/dlcjfgmlnasa/CARMEN/releases/download/v2.0.0/carmen-base.pt
+huggingface-cli download rinai1122/CARMEN carmen-base.pt --local-dir checkpoints
 ```
 
 Each checkpoint embeds its own `ModelConfig`, so the architecture is reconstructed

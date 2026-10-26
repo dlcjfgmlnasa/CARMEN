@@ -21,6 +21,7 @@ from pathlib import Path
 import torch
 from torch import nn
 
+from carmen.checkpoint import resolve_checkpoint
 from carmen.config import ModelConfig
 from carmen.data.collate import PackedBatch
 from carmen.modules.packed_scaler import PackedScaler, PackedStdScaler
@@ -281,10 +282,14 @@ class CARMEN(nn.Module):
     ) -> CARMEN:
         """Load a pretrained CARMEN from a checkpoint, in eval mode.
 
+        ``checkpoint_path`` is a local ``.pt`` or a released model name
+        (``"carmen-base"``), which is downloaded from the Hugging Face Hub.
+
         The checkpoint embeds its own ``ModelConfig``, so the architecture is
         rebuilt automatically. Use ``DownstreamModelWrapper`` instead when you also
         want freezing, pooling, or LoRA.
         """
+        checkpoint_path = resolve_checkpoint(checkpoint_path)
         state = torch.load(checkpoint_path, map_location=device, weights_only=False)
         if "config" not in state:
             raise ValueError(f"Checkpoint has no 'config' key: {checkpoint_path}")

@@ -22,6 +22,7 @@ from pathlib import Path
 import torch
 from torch import nn
 
+from carmen.checkpoint import resolve_checkpoint
 from carmen.config import ModelConfig
 from carmen.data.collate import PackedBatch
 from carmen.model import CARMEN
@@ -74,7 +75,8 @@ class DownstreamModelWrapper(nn.Module):
     Parameters
     ----------
     checkpoint_path:
-        Pretrained checkpoint path (``.pt``).
+        Pretrained checkpoint path (``.pt``), or a released model name
+        (``"carmen-base"``) to download from the Hugging Face Hub.
     device:
         Device to load the model onto.
     patch_stride:
@@ -96,6 +98,7 @@ class DownstreamModelWrapper(nn.Module):
         self.device = torch.device(device)
 
         # 1. Load checkpoint -> restore config -> build model
+        checkpoint_path = resolve_checkpoint(checkpoint_path)
         state = torch.load(
             checkpoint_path, map_location=self.device, weights_only=False
         )

@@ -21,9 +21,12 @@ dependencies = [
     "einops>=0.7",
 ]
 
+[project.optional-dependencies]
+hf = ["huggingface_hub>=0.20"]
+
 [project.urls]
 Homepage = "https://github.com/dlcjfgmlnasa/CARMEN"
-Releases = "https://github.com/dlcjfgmlnasa/CARMEN/releases"
+Weights = "https://huggingface.co/rinai1122/CARMEN"
 
 [tool.setuptools.packages.find]
 include = ["carmen*"]

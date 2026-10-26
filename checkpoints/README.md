@@ -1,8 +1,9 @@
 # Checkpoints
 
-CARMEN is released in three sizes. Weights are distributed as **GitHub Release assets**
-— not committed to git, so clones stay small. Release assets allow files up to 2 GB, so
-every fp32 checkpoint fits.
+CARMEN is released in three sizes. Weights are hosted on the Hugging Face Hub at
+[rinai1122/CARMEN](https://huggingface.co/rinai1122/CARMEN) — not committed to git, so
+clones stay small. `CARMEN.from_pretrained("carmen-base")` downloads and caches them for
+you; to keep a local copy, place the files here.
 
 | Model | Params | File | Size (fp32) |
 | --- | --: | --- | --: |
@@ -21,22 +22,17 @@ checkpoints/
 
 ## Download
 
-Get the weights from the Releases page:
-<https://github.com/dlcjfgmlnasa/CARMEN/releases>
-
 ```bash
-# once a release is published (example tag v2.0.0):
+pip install huggingface_hub
 for size in small base large; do
-  curl -L -o checkpoints/carmen-$size.pt \
-    https://github.com/dlcjfgmlnasa/CARMEN/releases/download/v2.0.0/carmen-$size.pt
+  huggingface-cli download rinai1122/CARMEN carmen-$size.pt --local-dir checkpoints
 done
 ```
 
 ## Publishing weights (maintainers)
 
-A training checkpoint also carries the optimizer state, which roughly triples the file
-(Base ~2 GB, Large ~5 GB — over the 2 GB Release asset limit). Keep only what inference
-needs before uploading:
+A training checkpoint also carries the optimizer state, which roughly triples the file.
+Keep only what inference needs before uploading:
 
 ```python
 import torch
@@ -44,12 +40,10 @@ s = torch.load("ckpt_from_training.pt", map_location="cpu", weights_only=False)
 torch.save({k: s[k] for k in ("model_state_dict", "config", "epoch")}, "checkpoints/carmen-base.pt")
 ```
 
-Then upload all three as assets of one release:
+Then upload it to the Hub:
 
 ```bash
-gh release create v2.0.0 checkpoints/carmen-small.pt checkpoints/carmen-base.pt \
-  checkpoints/carmen-large.pt --title "CARMEN v2.0.0" --notes "Pretrained CARMEN weights"
-# or: create a new release in the GitHub UI and drag-and-drop the .pt files
+huggingface-cli upload rinai1122/CARMEN checkpoints/carmen-base.pt carmen-base.pt
 ```
 
 ## What is inside a checkpoint
