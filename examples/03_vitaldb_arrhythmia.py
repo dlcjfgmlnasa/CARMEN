@@ -13,9 +13,7 @@ Each 30 s window whose beats all share one rhythm becomes a sample, with the pap
 classes: NSR, AF (AFIB/AFL), VA (VT, patterned ventricular ectopy) and BradyCond (AVB,
 SND). Supraventricular ectopy, noise and unclassifiable beats are dropped. CARMEN stays
 frozen; a logistic regression on its pooled features is trained on half the patients and
-tested on the other half (split by ``subjectid``, so no patient is on both sides). The
-same pipeline is run on a randomly initialized CARMEN of the same architecture, so the
-gap shows what pretraining adds.
+tested on the other half (split by ``subjectid``, so no patient is on both sides).
 
 VitalDB comes from the same hospital as part of the pretraining corpus, and this demo does
 not remove patients that may also be in it — the paper's evaluation does. It is a small
@@ -42,7 +40,7 @@ from sklearn.metrics import roc_auc_score
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
-from carmen import CARMEN, DownstreamModelWrapper, make_batch
+from carmen import DownstreamModelWrapper, make_batch
 
 ANNOT_URL = "https://physionet.org/files/vitaldb-arrhythmia/1.0.0/"
 CLASSES = ["NSR", "AF", "VA", "BradyCond"]
@@ -187,20 +185,12 @@ def main() -> None:
           f"({len(pats) // 2} held-out patients; test "
           + ", ".join(f"{n} {((y == k) & test).sum()}" for k, n in enumerate(CLASSES)) + ")")
 
-    # 3) Pretrained CARMEN vs. the same architecture with random weights.
+    # 3) Frozen CARMEN features → logistic regression.
     device = "cuda" if torch.cuda.is_available() else "cpu"
     wrapper = DownstreamModelWrapper(args.model, device=device)
-    X_pre = features(wrapper, data)
-    torch.manual_seed(args.seed)
-    rand = CARMEN.from_config(wrapper.config)
-    rand.rope_pi = wrapper.model.rope_pi
-    wrapper.model = rand.to(device).eval()
-    X_rand = features(wrapper, data)
-
+    macro, per = evaluate(features(wrapper, data), y, test)
     print(f"\n{'test AUROC':<22}{'macro':>7}" + "".join(f"{n:>11}" for n in CLASSES))
-    for name, X in [(f"{args.model} pretrained", X_pre), ("random init", X_rand)]:
-        macro, per = evaluate(X, y, test)
-        print(f"{name:<22}{macro:>7.3f}" + "".join(f"{a:>11.3f}" for a in per))
+    print(f"{args.model:<22}{macro:>7.3f}" + "".join(f"{a:>11.3f}" for a in per))
 
 
 if __name__ == "__main__":

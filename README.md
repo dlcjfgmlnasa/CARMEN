@@ -222,7 +222,7 @@ independent row.
 - **[`00_smoke_test.py`](examples/00_smoke_test.py)** — build from config and run a forward pass, no weights needed
 - **[`01_extract_features.py`](examples/01_extract_features.py)** — load a checkpoint, extract pooled features *(downloads weights)*
 - **[`02_downstream_probe.py`](examples/02_downstream_probe.py)** — linear probe and LoRA on frozen features *(downloads weights)*
-- **[`03_vitaldb_arrhythmia.py`](examples/03_vitaldb_arrhythmia.py)** — real data: 4-class rhythm classification from intraoperative ECG, vs. a random-init control *(downloads weights and open data)*
+- **[`03_vitaldb_arrhythmia.py`](examples/03_vitaldb_arrhythmia.py)** — real data: 4-class rhythm classification from intraoperative ECG *(downloads weights and open data)*
 
 ```bash
 python examples/00_smoke_test.py
@@ -239,8 +239,7 @@ It cuts 30 s windows whose beats all share one rhythm, in four classes — norma
 rhythm (NSR), atrial fibrillation/flutter (AF), ventricular arrhythmia (VA: VT, patterned
 ventricular ectopy) and bradyarrhythmia/conduction block (BradyCond: AVB, SND). CARMEN
 stays frozen and a logistic regression is fit on the pooled features, training on half
-the patients and testing on the other half. The same pipeline runs on a randomly
-initialized CARMEN of the same architecture, so the gap is what pretraining adds.
+the patients and testing on the other half.
 
 ```bash
 pip install vitaldb scikit-learn
@@ -252,8 +251,7 @@ Default run (150 cases → 2,812 windows from 147 patients; test set 1,408 windo
 
 | Test AUROC (one-vs-rest) | Macro | NSR | AF | VA | BradyCond |
 | --- | --: | --: | --: | --: | --: |
-| CARMEN-Base, pretrained | **0.967** | **0.965** | **1.000** | **0.989** | **0.913** |
-| Same architecture, random init | 0.845 | 0.835 | 0.871 | 0.975 | 0.700 |
+| CARMEN-Base | 0.967 | 0.965 | 1.000 | 0.989 | 0.913 |
 
 This is a demo that the released weights work on real waveforms, not the paper protocol
 (482 cases, patient-level 5-fold CV). VA has only 59 windows in this run (VT rarely lasts
