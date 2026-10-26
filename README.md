@@ -220,12 +220,13 @@ independent row.
 📓 **[`quickstart.ipynb`](examples/quickstart.ipynb)** — end to end: build → features → pretrained weights
 
 - **[`00_smoke_test.py`](examples/00_smoke_test.py)** — build from config and run a forward pass, no weights needed
-- **[`01_extract_features.py`](examples/01_extract_features.py)** — load a checkpoint, extract pooled features *(requires weights)*
-- **[`02_downstream_probe.py`](examples/02_downstream_probe.py)** — linear probe and LoRA on frozen features *(requires weights)*
+- **[`01_extract_features.py`](examples/01_extract_features.py)** — load a checkpoint, extract pooled features *(downloads weights)*
+- **[`02_downstream_probe.py`](examples/02_downstream_probe.py)** — linear probe and LoRA on frozen features *(downloads weights)*
 
 ```bash
 python examples/00_smoke_test.py
-python examples/01_extract_features.py checkpoints/carmen-base.pt
+python examples/01_extract_features.py               # downloads carmen-base from the Hub
+python examples/01_extract_features.py carmen-large  # or another model name / a local .pt path
 ```
 
 ## 🗂️ Repository Layout

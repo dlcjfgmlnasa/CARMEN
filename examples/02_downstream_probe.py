@@ -1,7 +1,7 @@
 # -*- coding:utf-8 -*-
 """02 — Downstream usage: attach a task head to frozen CARMEN features.
 
-    python examples/02_downstream_probe.py [path/to/checkpoint.pt]
+    python examples/02_downstream_probe.py [carmen-small|carmen-base|carmen-large|path/to/checkpoint.pt]
 
 Two transfer strategies, one training step each:
   A) Linear probing — freeze the encoder, train a small head on the features.
@@ -9,7 +9,6 @@ Two transfer strategies, one training step each:
 
 The labels here are random; use your own.
 """
-import os
 import sys
 
 import _common  # noqa: F401 — puts the repo root on sys.path
@@ -21,10 +20,7 @@ from carmen import DownstreamModelWrapper, LinearProbe, make_batch
 
 
 def main() -> None:
-    ckpt = sys.argv[1] if len(sys.argv) > 1 else "checkpoints/carmen-base.pt"
-    if not os.path.exists(ckpt):
-        print(f"Checkpoint not found: {ckpt} (see checkpoints/README.md)")
-        return
+    ckpt = sys.argv[1] if len(sys.argv) > 1 else "carmen-base"
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     wrapper = DownstreamModelWrapper(ckpt, device=device)

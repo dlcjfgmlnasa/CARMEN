@@ -1,12 +1,13 @@
 # -*- coding:utf-8 -*-
 """01 — Extract features from a pretrained CARMEN checkpoint.
 
-    python examples/01_extract_features.py [path/to/checkpoint.pt]
+    python examples/01_extract_features.py [carmen-small|carmen-base|carmen-large|path/to/checkpoint.pt]
+
+A model name downloads the weights from the Hugging Face Hub (default: carmen-base).
 
 Loads the pretrained encoder and returns a pooled feature vector per patient that
 you can feed to any downstream head.
 """
-import os
 import sys
 
 import _common  # noqa: F401 — puts the repo root on sys.path
@@ -17,11 +18,7 @@ from carmen import DownstreamModelWrapper, make_batch
 
 
 def main() -> None:
-    ckpt = sys.argv[1] if len(sys.argv) > 1 else "checkpoints/carmen-base.pt"
-    if not os.path.exists(ckpt):
-        print(f"Checkpoint not found: {ckpt}")
-        print("Download it (see checkpoints/README.md) or pass a path as argument.")
-        return
+    ckpt = sys.argv[1] if len(sys.argv) > 1 else "carmen-base"
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     wrapper = DownstreamModelWrapper(ckpt, device=device)
