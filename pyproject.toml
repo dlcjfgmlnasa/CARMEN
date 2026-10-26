@@ -26,7 +26,7 @@ hf = ["huggingface_hub>=0.20"]
 
 [project.urls]
 Homepage = "https://github.com/dlcjfgmlnasa/CARMEN"
-Weights = "https://huggingface.co/rinai1122/CARMEN"
+Weights = "https://huggingface.co/dlcjfgmlnasa28/CARMEN"
 
 [tool.setuptools.packages.find]
 include = ["carmen*"]

@@ -6,10 +6,10 @@
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.2+-EE4C2C.svg?logo=pytorch&logoColor=white)](https://pytorch.org/)
 [![Modalities](https://img.shields.io/badge/modalities-10-teal.svg)](#-overview)
-[![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-CARMEN-FFD21E.svg)](https://huggingface.co/rinai1122/CARMEN)
+[![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-CARMEN-FFD21E.svg)](https://huggingface.co/dlcjfgmlnasa28/CARMEN)
 [![Sizes](https://img.shields.io/badge/sizes-52M%20%7C%20174M%20%7C%20410M-8A2BE2.svg)](#-model-weights)
 
-[**Quickstart Notebook**](examples/quickstart.ipynb) · [**Examples**](examples) · [**Inference API**](#-inference-api) · [**Model Weights**](https://huggingface.co/rinai1122/CARMEN)
+[**Quickstart Notebook**](examples/quickstart.ipynb) · [**Examples**](examples) · [**Inference API**](#-inference-api) · [**Model Weights**](https://huggingface.co/dlcjfgmlnasa28/CARMEN)
 
 ## 📰 News
 
@@ -102,7 +102,7 @@ end (the first sections of the quickstart notebook also run without weights).
 
 > [!NOTE]
 > Weights are hosted on the Hugging Face Hub at
-> [**rinai1122/CARMEN**](https://huggingface.co/rinai1122/CARMEN). Public access opens
+> [**dlcjfgmlnasa28/CARMEN**](https://huggingface.co/dlcjfgmlnasa28/CARMEN). Public access opens
 > upon publication of the full paper.
 
 CARMEN comes in three sizes. They share the input pipeline (10 modalities, 100 Hz,
@@ -126,7 +126,7 @@ Or download the file yourself into `checkpoints/` (weights are *not* committed t
 see [`checkpoints/README.md`](checkpoints/README.md)):
 
 ```bash
-huggingface-cli download rinai1122/CARMEN carmen-base.pt --local-dir checkpoints
+huggingface-cli download dlcjfgmlnasa28/CARMEN carmen-base.pt --local-dir checkpoints
 ```
 
 Each checkpoint embeds its own `ModelConfig`, so the architecture is reconstructed

@@ -1,7 +1,7 @@
 # Checkpoints
 
 CARMEN is released in three sizes. Weights are hosted on the Hugging Face Hub at
-[rinai1122/CARMEN](https://huggingface.co/rinai1122/CARMEN) — not committed to git, so
+[dlcjfgmlnasa28/CARMEN](https://huggingface.co/dlcjfgmlnasa28/CARMEN) — not committed to git, so
 clones stay small. `CARMEN.from_pretrained("carmen-base")` downloads and caches them for
 you; to keep a local copy, place the files here.
 
@@ -25,7 +25,7 @@ checkpoints/
 ```bash
 pip install huggingface_hub
 for size in small base large; do
-  huggingface-cli download rinai1122/CARMEN carmen-$size.pt --local-dir checkpoints
+  huggingface-cli download dlcjfgmlnasa28/CARMEN carmen-$size.pt --local-dir checkpoints
 done
 ```
 
@@ -43,7 +43,7 @@ torch.save({k: s[k] for k in ("model_state_dict", "config", "epoch")}, "checkpoi
 Then upload it to the Hub:
 
 ```bash
-huggingface-cli upload rinai1122/CARMEN checkpoints/carmen-base.pt carmen-base.pt
+huggingface-cli upload dlcjfgmlnasa28/CARMEN checkpoints/carmen-base.pt carmen-base.pt
 ```
 
 ## What is inside a checkpoint

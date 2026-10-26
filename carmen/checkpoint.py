@@ -14,7 +14,7 @@ import torch
 from torch import nn
 
 
-HF_REPO_ID = "rinai1122/CARMEN"
+HF_REPO_ID = "dlcjfgmlnasa28/CARMEN"
 PRETRAINED = ("carmen-small", "carmen-base", "carmen-large")
 
 
