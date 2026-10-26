@@ -222,12 +222,42 @@ independent row.
 - **[`00_smoke_test.py`](examples/00_smoke_test.py)** — build from config and run a forward pass, no weights needed
 - **[`01_extract_features.py`](examples/01_extract_features.py)** — load a checkpoint, extract pooled features *(downloads weights)*
 - **[`02_downstream_probe.py`](examples/02_downstream_probe.py)** — linear probe and LoRA on frozen features *(downloads weights)*
+- **[`03_vitaldb_af.py`](examples/03_vitaldb_af.py)** — real data: atrial fibrillation detection from intraoperative ECG *(downloads weights and open data)*
 
 ```bash
 python examples/00_smoke_test.py
 python examples/01_extract_features.py               # downloads carmen-base from the Hub
 python examples/01_extract_features.py carmen-large  # or another model name / a local .pt path
 ```
+
+### 🫀 Real data: atrial fibrillation on VitalDB
+
+`03_vitaldb_af.py` uses open data only — rhythm labels from the
+[VitalDB Arrhythmia Database](https://physionet.org/content/vitaldb-arrhythmia/1.0.0/)
+(PhysioNet, CC BY 4.0) and the matching ECG lead II from
+[VitalDB](https://vitaldb.net). It cuts 30 s windows that are all AF or all normal sinus
+rhythm, keeps CARMEN frozen, and fits a logistic regression on the pooled features,
+training on half the patients and testing on the other half. VitalDB comes from the
+same hospital as part of the pretraining corpus, and this demo does not remove patients
+that may also be in it (the paper's evaluation does).
+
+```bash
+pip install vitaldb scikit-learn
+python examples/03_vitaldb_af.py                 # CARMEN-Base
+python examples/03_vitaldb_af.py --random-init   # same architecture, untrained weights
+```
+
+Default run (100 cases → 1,761 windows from 95 patients; test set 877 windows from
+47 held-out patients):
+
+| Features | Test AUROC |
+| --- | --: |
+| CARMEN-Base, pretrained | **1.000** |
+| Same architecture, random init | 0.930 |
+
+The task is small and easy on purpose — it is a demo that the released weights work on
+real waveforms, not the paper protocol (482 cases, 4 rhythm classes, patient-level 5-fold
+CV). Numbers vary slightly with `--n-cases` and `--seed`; downloads take a few minutes.
 
 ## 🗂️ Repository Layout
 
