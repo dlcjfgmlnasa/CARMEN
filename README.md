@@ -281,7 +281,7 @@ of Health & Welfare, Republic of Korea (grant number: RS-2024-00439677; NTIS num
 
 ```bibtex
 @software{carmen2026,
-  title  = {CARMEN: A Cardiorespiratory Foundation Model for Continuous Physiological Waveforms},
+  title  = {CARMEN: A Cardiorespiratory Foundation Model Pretrained on Ten Physiological Signals for Perioperative and Critical Care},
   author = {The CARMEN Authors},
   year   = {2026},
   url    = {https://github.com/dlcjfgmlnasa/CARMEN}
