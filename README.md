@@ -17,25 +17,19 @@
 
 ## 📖 Overview
 
-**CARMEN** is a foundation model for the continuous waveforms recorded at the bedside
-and in the operating room. A **single Transformer encoder**, released in three sizes
-(**Small 52M · Base 174M · Large 410M**), is pretrained on **10 signal modalities** and
-used as a frozen **feature extractor** for downstream clinical tasks (detection,
-prediction, outcome, estimation and phenotyping), with only a lightweight head trained
-on top.
+**CARMEN** is a multimodal foundation model for the cardiorespiratory waveforms recorded
+in the operating room and intensive care unit. Most existing biosignal foundation models
+are limited to non-invasive signals such as ECG and PPG. CARMEN learns **10 signal
+modalities**, including invasive haemodynamic and respiratory waveforms (arterial, central
+venous and pulmonary arterial pressure, capnography, airway pressure and flow), in a
+**single Transformer encoder**. It keeps each signal's absolute physical units and accepts
+any combination of signals at variable input lengths.
 
-Two design choices do most of the work:
-
-- **One tokenizer, one encoder.** Every modality is tokenized the same way, as raw
-  patches fed to a shared encoder, so a single model covers all ten signals instead of
-  one model per signal.
-- **Absolute level is preserved (`LSCNorm`).** Per-window normalization would
-  otherwise discard the absolute level of a pressure waveform. The `(loc, scale)`
-  removed by the scaler, together with each patch's own mean and standard deviation,
-  is fed back into **every** layer as AdaLN modulation, so clinically meaningful
-  magnitudes stay available to the encoder. PPG and RESP_Impedance are the exceptions:
-  their amplitude is set by device gain rather than physiology, so they are excluded
-  from this conditioning altogether.
+CARMEN was pretrained on about 530,000 perioperative and ICU waveform recordings from
+Seoul National University Hospital (2.27 million modality-hours in total). It is released
+in three sizes (**Small 52M · Base 174M · Large 410M**) and is used as a frozen **feature
+extractor**: for each downstream clinical task (detection, prediction, outcome, estimation
+and phenotyping), only a lightweight head is trained on top.
 
 > [!NOTE]
 > This repository is **inference-only** — the pretraining loop is not included.
