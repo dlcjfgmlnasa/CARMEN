@@ -13,7 +13,7 @@
 
 ## 📰 News
 
-- **2026.10** — CARMEN has been accepted to the **AI4Health Workshop at NeurIPS 2026**. 🎉
+- **2026.10** — CARMEN has been accepted to the **[GenAI4Health Workshop at NeurIPS 2026](https://genai4health.github.io/2026-NeurIPS/)**. 🎉
 
 ## 📖 Overview
 
