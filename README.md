@@ -17,6 +17,10 @@
 
 ## 📖 Overview
 
+<p align="center">
+  <img src="figures/overview.png" alt="CARMEN overview: bedside waveforms with varying channel sets and window lengths are encoded by CARMEN into a shared representation space" width="100%">
+</p>
+
 **CARMEN** is a multimodal foundation model for the cardiorespiratory waveforms recorded
 in the operating room and intensive care unit. Most existing biosignal foundation models
 are limited to non-invasive signals such as ECG and PPG. CARMEN learns **10 signal
