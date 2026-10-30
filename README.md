@@ -101,9 +101,8 @@ end (the first sections of the quickstart notebook also run without weights).
 > [!NOTE]
 > Weights are hosted on the Hugging Face Hub at
 > [**dlcjfgmlnasa28/CARMEN**](https://huggingface.co/dlcjfgmlnasa28/CARMEN). Public access opens
-> upon publication of the full paper. Until then, weights are shared on request as zip files
-> (`carmen-small.zip` / `carmen-base.zip` / `carmen-large.zip`) — see
-> [Weights from a zip file](#weights-from-a-zip-file).
+> upon publication of the full paper. If you already have a checkpoint file, see
+> [Using a local checkpoint](#using-a-local-checkpoint).
 
 CARMEN comes in three sizes. They share the input pipeline (10 modalities, 100 Hz,
 0.25 s patches, same conditioning) and pretraining recipe; only width and depth differ.
@@ -130,24 +129,22 @@ see [`checkpoints/README.md`](checkpoints/README.md)):
 huggingface-cli download dlcjfgmlnasa28/CARMEN carmen-base.pt --local-dir checkpoints
 ```
 
-#### Weights from a zip file
+#### Using a local checkpoint
 
-If you received the weights as zip files, unzip them into `checkpoints/` of this
-repository. Each zip holds one `.pt` file:
-
-```bash
-unzip carmen-base.zip -d checkpoints      # Windows PowerShell: Expand-Archive carmen-base.zip checkpoints
-# -> checkpoints/carmen-base.pt
-```
-
-The model names then load the local file, with no Hugging Face account or internet
-connection, so the examples run unchanged:
+If you already have a checkpoint file (e.g. `carmen-base.pt`), you can also use it
+directly — no Hugging Face account or internet connection needed. Put it in
+`checkpoints/` and load it by name, so the examples run unchanged:
 
 ```python
-model = CARMEN.from_pretrained("carmen-base")
+model = CARMEN.from_pretrained("carmen-base")          # loads checkpoints/carmen-base.pt
 ```
 
-A `.pt` file kept elsewhere can be passed by path: `CARMEN.from_pretrained("path/to/carmen-base.pt")`.
+Or pass its path from anywhere:
+
+```python
+model = CARMEN.from_pretrained("path/to/carmen-base.pt")
+wrapper = DownstreamModelWrapper("path/to/carmen-base.pt", device="cuda")
+```
 
 Each checkpoint embeds its own `ModelConfig`, so the architecture is reconstructed
 automatically — you never specify it by hand.
