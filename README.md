@@ -101,7 +101,9 @@ end (the first sections of the quickstart notebook also run without weights).
 > [!NOTE]
 > Weights are hosted on the Hugging Face Hub at
 > [**dlcjfgmlnasa28/CARMEN**](https://huggingface.co/dlcjfgmlnasa28/CARMEN). Public access opens
-> upon publication of the full paper.
+> upon publication of the full paper. Until then, weights are shared on request as zip files
+> (`carmen-small.zip` / `carmen-base.zip` / `carmen-large.zip`) — see
+> [Weights from a zip file](#weights-from-a-zip-file).
 
 CARMEN comes in three sizes. They share the input pipeline (10 modalities, 100 Hz,
 0.25 s patches, same conditioning) and pretraining recipe; only width and depth differ.
@@ -112,8 +114,9 @@ CARMEN comes in three sizes. They share the input pipeline (10 modalities, 100 H
 | **CARMEN-Base** | **174M** | 768 | 24 | 12 | `carmen-base.pt` | ~700 MB |
 | CARMEN-Large | 410M | 1024 | 32 | 16 | `carmen-large.pt` | ~1.6 GB |
 
-The examples default to **Base**. Pass a model name instead of a path and the weights
-are downloaded from the Hub and cached (needs `pip install -e ".[hf]"`):
+The examples default to **Base**. Pass a model name instead of a path: CARMEN first looks
+for `checkpoints/<name>.pt`, and otherwise downloads the weights from the Hub and caches
+them (needs `pip install -e ".[hf]"`):
 
 ```python
 model = CARMEN.from_pretrained("carmen-base")          # or "carmen-small" / "carmen-large"
@@ -126,6 +129,25 @@ see [`checkpoints/README.md`](checkpoints/README.md)):
 ```bash
 huggingface-cli download dlcjfgmlnasa28/CARMEN carmen-base.pt --local-dir checkpoints
 ```
+
+#### Weights from a zip file
+
+If you received the weights as zip files, unzip them into `checkpoints/` of this
+repository. Each zip holds one `.pt` file:
+
+```bash
+unzip carmen-base.zip -d checkpoints      # Windows PowerShell: Expand-Archive carmen-base.zip checkpoints
+# -> checkpoints/carmen-base.pt
+```
+
+The model names then load the local file, with no Hugging Face account or internet
+connection, so the examples run unchanged:
+
+```python
+model = CARMEN.from_pretrained("carmen-base")
+```
+
+A `.pt` file kept elsewhere can be passed by path: `CARMEN.from_pretrained("path/to/carmen-base.pt")`.
 
 Each checkpoint embeds its own `ModelConfig`, so the architecture is reconstructed
 automatically — you never specify it by hand.

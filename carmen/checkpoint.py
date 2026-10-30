@@ -16,14 +16,16 @@ from torch import nn
 
 HF_REPO_ID = "dlcjfgmlnasa28/CARMEN"
 PRETRAINED = ("carmen-small", "carmen-base", "carmen-large")
+LOCAL_DIRS = (Path("checkpoints"), Path(__file__).resolve().parents[1] / "checkpoints")
 
 
 def resolve_checkpoint(name_or_path: str | Path) -> Path:
     """Return a local checkpoint path.
 
     An existing file is returned as is. A released model name (``"carmen-base"``,
-    or just ``"base"``) is downloaded from the Hugging Face Hub (``HF_REPO_ID``)
-    and cached; this needs ``pip install huggingface_hub``.
+    or just ``"base"``) is looked up as ``checkpoints/<name>.pt`` (in the working
+    directory, then in the repository), and otherwise downloaded from the Hugging
+    Face Hub (``HF_REPO_ID``) and cached; this needs ``pip install huggingface_hub``.
     """
     path = Path(name_or_path)
     if path.is_file():
@@ -35,6 +37,9 @@ def resolve_checkpoint(name_or_path: str | Path) -> Path:
         raise FileNotFoundError(
             f"No checkpoint file {name_or_path!r} and not a released model {PRETRAINED}"
         )
+    for d in LOCAL_DIRS:
+        if (d / f"{name}.pt").is_file():
+            return d / f"{name}.pt"
     try:
         from huggingface_hub import hf_hub_download
     except ImportError as e:

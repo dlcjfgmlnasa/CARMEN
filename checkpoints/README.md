@@ -20,6 +20,18 @@ checkpoints/
 └── carmen-large.pt
 ```
 
+With the files here, `CARMEN.from_pretrained("carmen-base")` loads the local file and
+never contacts the Hub.
+
+## From a zip file
+
+Weights shared as `carmen-{small,base,large}.zip` each hold one `.pt` file. Unzip them
+into this folder:
+
+```bash
+unzip carmen-base.zip -d checkpoints      # Windows PowerShell: Expand-Archive carmen-base.zip checkpoints
+```
+
 ## Download
 
 ```bash
