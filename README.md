@@ -2,7 +2,7 @@
 
 ### A Cardiorespiratory Foundation Model Pretrained on Ten Physiological Signals for Perioperative and Critical Care
 
-[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-PolyForm_Noncommercial_1.0.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.2+-EE4C2C.svg?logo=pytorch&logoColor=white)](https://pytorch.org/)
 [![Modalities](https://img.shields.io/badge/modalities-10-teal.svg)](#-overview)
@@ -294,4 +294,11 @@ of Health & Welfare, Republic of Korea (grant number: RS-2024-00439677; NTIS num
 
 ## ⚖️ License
 
-Released under the [Apache License 2.0](LICENSE).
+Released under the [PolyForm Noncommercial License 1.0.0](LICENSE): free for research,
+education, personal and other noncommercial use. Commercial use (including use in
+commercial products or services) requires a separate license — please contact
+**dlcjfgmlnasa28@gmail.com**.
+
+The model weights on Hugging Face are covered by the same terms. Files ported from
+Salesforce uni2ts remain under the [Apache License 2.0](LICENSES/Apache-2.0.txt);
+see [NOTICE](NOTICE).

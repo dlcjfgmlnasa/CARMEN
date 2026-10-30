@@ -5,7 +5,7 @@ This product includes software ported and adapted from:
 
   uni2ts (Salesforce)
   https://github.com/SalesforceAIResearch/uni2ts
-  Licensed under the Apache License, Version 2.0.
+  Licensed under the Apache License, Version 2.0 (full text: LICENSES/Apache-2.0.txt).
 
 The following modules contain code derived from uni2ts:
   - carmen/modules/attention.py
@@ -17,3 +17,7 @@ The following modules contain code derived from uni2ts:
 
 These files were modified (e.g. RMSNorm as the default norm layer, LSCNorm
 conditioning, packed-batch scalers, and integration into the CARMEN architecture).
+
+All other CARMEN code and the model weights are licensed under the PolyForm
+Noncommercial License 1.0.0 (see LICENSE). For commercial use, contact
+dlcjfgmlnasa28@gmail.com.
