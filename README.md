@@ -297,7 +297,7 @@ of Health & Welfare, Republic of Korea (grant number: RS-2024-00439677; NTIS num
 Released under the [PolyForm Noncommercial License 1.0.0](LICENSE): free for research,
 education, personal and other noncommercial use. Commercial use (including use in
 commercial products or services) requires a separate license — please contact
-**dlcjfgmlnasa28@gmail.com**.
+**dlcjfgmlnasa28@gmail.com** or **vital@snu.ac.kr**.
 
 The model weights on Hugging Face are covered by the same terms. Files ported from
 Salesforce uni2ts remain under the [Apache License 2.0](LICENSES/Apache-2.0.txt);
