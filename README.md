@@ -176,6 +176,22 @@ features = wrapper.extract_features(batch)   # (B, d_model)
 > drops a signal. For reproducible results, pass equal-length signals, call
 > `random.seed(0)` before building the batch, or use `collate_mode="ci"`.
 
+> [!IMPORTANT]
+> **One feature per signal: set `max_length`.** `extract_features` mean-pools each
+> *row* of the batch, and by default `make_batch` packs every signal into a single
+> row. Even with `collate_mode="ci"` (attention blocked between signals) you then get
+> **one** feature averaged over all signals. To get one feature per signal — e.g. per
+> lead of a 12-lead ECG, or many recordings in one batch — set `max_length` to the
+> signal length so each signal fills its own row:
+>
+> ```python
+> leads = [("ecg", ecg[:, j]) for j in range(12)]          # 12 × 1,000 samples (10 s @ 100 Hz)
+> batch = make_batch(leads, patch_size=wrapper.patch_size, collate_mode="ci", max_length=1000)
+> features = wrapper.extract_features(batch)               # (12, d_model), same as 12 separate calls
+> ```
+>
+> Use equal-length signals whose length is a multiple of `patch_size`.
+
 ## 🧩 Inference API
 
 `CARMEN.from_pretrained(path)` returns the bare encoder; `DownstreamModelWrapper` adds
@@ -225,8 +241,9 @@ batch = PackCollate(max_length=8192, patch_size=25)([sample])
 ```
 
 `collate_mode="any_variate"` (default) groups a patient's modalities into one row so
-the encoder can attend across them; `collate_mode="ci"` treats each signal as an
-independent row.
+the encoder can attend across them; `collate_mode="ci"` blocks attention between
+signals. In both modes signals are packed into rows of `max_length` samples, and
+pooling is per row — see the note on `max_length` above.
 
 ## 🔬 Examples
 

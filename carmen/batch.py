@@ -48,12 +48,14 @@ def make_batch(
         Sampling rate of every signal, in Hz.
     collate_mode:
         ``"any_variate"`` groups all signals of one patient so the encoder can
-        attend across modalities (cross-modal). ``"ci"`` treats each signal as an
-        independent row (channel-independent).
+        attend across modalities (cross-modal). ``"ci"`` blocks attention between
+        signals (channel-independent).
+    max_length:
+        Row width of the packed tensor. Defaults to fitting all signals in one row.
+        ``extract_features`` pools per row, so set this to the signal length to get
+        one feature per signal.
     stride:
         Patch stride. ``None`` means non-overlapping. Must match the model's.
-    max_length:
-        Row width of the packed tensor. Defaults to fitting all signals.
 
     Notes
     -----
