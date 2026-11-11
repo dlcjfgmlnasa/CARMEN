@@ -35,9 +35,6 @@ in three sizes (**Small 52M · Base 174M · Large 410M**) and is used as a froze
 extractor**: for each downstream clinical task (detection, prediction, outcome, estimation
 and phenotyping), only a lightweight head is trained on top.
 
-> [!NOTE]
-> This repository is **inference-only** — the pretraining loop is not included.
-
 > [!WARNING]
 > **Research use only.** CARMEN is not a medical device and has not been cleared or
 > approved for clinical use. Do not use its outputs for diagnosis or to guide patient
@@ -92,16 +89,15 @@ Requires Python ≥ 3.10, PyTorch ≥ 2.2, einops ≥ 0.7.
 python examples/00_smoke_test.py
 ```
 
-This builds the model from a config with random weights and runs a forward pass. Until
-the pretrained weights are released, it is the only example script that runs end to
-end (the first sections of the quickstart notebook also run without weights).
+This builds the model from a config with random weights and runs a forward pass, so it
+needs no downloaded weights.
 
 ### 🧠 Model weights
 
 > [!NOTE]
 > Weights are hosted on the Hugging Face Hub at
-> [**dlcjfgmlnasa28/CARMEN**](https://huggingface.co/dlcjfgmlnasa28/CARMEN). Public access opens
-> upon publication of the full paper. If you already have a checkpoint file, see
+> [**dlcjfgmlnasa28/CARMEN**](https://huggingface.co/dlcjfgmlnasa28/CARMEN) and are publicly
+> downloadable (no account needed). If you already have a checkpoint file, see
 > [Using a local checkpoint](#using-a-local-checkpoint).
 
 CARMEN comes in three sizes. They share the input pipeline (10 modalities, 100 Hz,
