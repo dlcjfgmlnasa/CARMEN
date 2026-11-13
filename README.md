@@ -2,6 +2,7 @@
 
 ### A Cardiorespiratory Foundation Model Pretrained on Ten Physiological Signals for Perioperative and Critical Care
 
+[![arXiv](https://img.shields.io/badge/arXiv-2611.15004-b31b1b.svg)](https://arxiv.org/pdf/2611.15004)
 [![License](https://img.shields.io/badge/License-PolyForm_Noncommercial_1.0.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.2+-EE4C2C.svg?logo=pytorch&logoColor=white)](https://pytorch.org/)
@@ -9,10 +10,11 @@
 [![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-CARMEN-FFD21E.svg)](https://huggingface.co/dlcjfgmlnasa28/CARMEN)
 [![Sizes](https://img.shields.io/badge/sizes-52M%20%7C%20174M%20%7C%20410M-8A2BE2.svg)](#-model-weights)
 
-[**Quickstart Notebook**](examples/quickstart.ipynb) · [**Examples**](examples) · [**Inference API**](#-inference-api) · [**Model Weights**](https://huggingface.co/dlcjfgmlnasa28/CARMEN)
+[**Paper (arXiv)**](https://arxiv.org/pdf/2611.15004) · [**Quickstart Notebook**](examples/quickstart.ipynb) · [**Examples**](examples) · [**Inference API**](#-inference-api) · [**Model Weights**](https://huggingface.co/dlcjfgmlnasa28/CARMEN)
 
 ## 📰 News
 
+- **2026.11** — The CARMEN paper is now available on **[arXiv](https://arxiv.org/pdf/2611.15004)**. 📄
 - **2026.10** — CARMEN has been accepted to the **[GenAI4Health Workshop at NeurIPS 2026](https://genai4health.github.io/2026-NeurIPS/)**. 🎉
 
 ## 📖 Overview
@@ -316,11 +318,14 @@ of Health & Welfare, Republic of Korea (grant number: RS-2024-00439677; NTIS num
 ## 📜 Citation
 
 ```bibtex
-@software{carmen2026,
-  title  = {CARMEN: A Cardiorespiratory Foundation Model Pretrained on Ten Physiological Signals for Perioperative and Critical Care},
-  author = {The CARMEN Authors},
-  year   = {2026},
-  url    = {https://github.com/dlcjfgmlnasa/CARMEN}
+@article{carmen2026,
+  title         = {CARMEN: A Cardiorespiratory Foundation Model Pretrained on Ten Physiological Signals for Perioperative and Critical Care},
+  author        = {The CARMEN Authors},
+  journal       = {arXiv preprint arXiv:2611.15004},
+  year          = {2026},
+  eprint        = {2611.15004},
+  archivePrefix = {arXiv},
+  url           = {https://arxiv.org/abs/2611.15004}
 }
 ```
 
