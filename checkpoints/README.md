@@ -2,8 +2,7 @@
 
 CARMEN is released in three sizes. Weights are hosted on the Hugging Face Hub at
 [dlcjfgmlnasa28/CARMEN](https://huggingface.co/dlcjfgmlnasa28/CARMEN) — not committed to git, so
-clones stay small. The Hub repository is currently **private** — request access from
-dlcjfgmlnasa28@gmail.com or vital@snu.ac.kr, then log in with `hf auth login`.
+clones stay small. The weights will be made **publicly available upon acceptance of the paper**.
 `CARMEN.from_pretrained("carmen-base")` downloads and caches them for you; to keep a local
 copy, place the files here.
 
