@@ -320,7 +320,7 @@ of Health & Welfare, Republic of Korea (grant number: RS-2024-00439677; NTIS num
 ```bibtex
 @article{carmen2026,
   title         = {CARMEN: A Cardiorespiratory Foundation Model Pretrained on Ten Physiological Signals for Perioperative and Critical Care},
-  author        = {The CARMEN Authors},
+  author        = {Lee, Cheol-Hui and Kim, Wookyung and Lee, Hyeonhoon and Lee, Garam and Eun, Da-in and Lee, Hyung-Chul},
   journal       = {arXiv preprint arXiv:2611.15004},
   year          = {2026},
   eprint        = {2611.15004},
