@@ -98,8 +98,10 @@ needs no downloaded weights.
 
 > [!NOTE]
 > Weights are hosted on the Hugging Face Hub at
-> [**dlcjfgmlnasa28/CARMEN**](https://huggingface.co/dlcjfgmlnasa28/CARMEN) and are publicly
-> downloadable (no account needed). If you already have a checkpoint file, see
+> [**dlcjfgmlnasa28/CARMEN**](https://huggingface.co/dlcjfgmlnasa28/CARMEN). The repository is
+> currently **private**: to request access, contact **dlcjfgmlnasa28@gmail.com** or
+> **vital@snu.ac.kr**. Once access is granted, log in with `hf auth login` before
+> downloading. If you already have a checkpoint file, see
 > [Using a local checkpoint](#using-a-local-checkpoint).
 
 CARMEN comes in three sizes. They share the input pipeline (10 modalities, 100 Hz,
