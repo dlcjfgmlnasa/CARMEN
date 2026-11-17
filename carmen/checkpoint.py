@@ -46,6 +46,10 @@ def resolve_checkpoint(name_or_path: str | Path) -> Path:
         raise ImportError(
             "Downloading released weights needs `pip install huggingface_hub`"
         ) from e
+    try:  # the Hub counts downloads by requests to config.json, not *.pt
+        hf_hub_download(HF_REPO_ID, "config.json")
+    except Exception:
+        pass
     return Path(hf_hub_download(HF_REPO_ID, f"{name}.pt"))
 
 
